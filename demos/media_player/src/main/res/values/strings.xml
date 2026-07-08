@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">P2P Camera Media Player</string>
+    <string name="btn_connect">连接</string>
+    <string name="btn_reconnect">重连</string>
+    <string name="label_relay">Relay 地址</string>
+    <string name="label_device_id">设备 ID</string>
+    <string name="hint_relay">/ip4/x.x.x.x/tcp/5001/p2p/12D3...</string>
+    <string name="hint_device_id">12D3KooW...</string>
+    <string name="state_idle">未连接</string>
+    <string name="state_connecting">连接中...</string>
+    <string name="state_connected">已连接</string>
+    <string name="state_direct">直连</string>
+    <string name="state_disconnected">已断开</string>
+    <string name="state_error">错误</string>
+</resources>
