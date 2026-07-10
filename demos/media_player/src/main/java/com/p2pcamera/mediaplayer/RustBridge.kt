@@ -19,7 +19,8 @@ object RustBridge {
     external fun nativeDestroy(handle: Long)
 
     // ── 控制 ──
-    // json: {"relays":["/ip4/.../tcp/.../p2p/..."],"deviceId":"12D3..."}
+    // json: {"relays":["/ip4/.../tcp/.../p2p/..."],"deviceId":"12D3...",
+    //        "enable_mdns":false,"stream_type":"auto","no_audio":false}
     external fun nativeConnect(handle: Long, json: String): Boolean
 
     // ── 数据轮询（非阻塞, 无帧时返回 null） ──

@@ -17,6 +17,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -34,7 +35,19 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "MediaPlayer"
         private const val POLL_INTERVAL_MS = 5L
+        private const val VIEWER_TOML = "viewer.toml"
     }
+
+    // ── viewer.toml 配置 ──
+    data class ViewerTomlConfig(
+        val relays: List<String>,
+        val camera: String,
+        val noAudio: Boolean,
+        val enableMdns: Boolean,
+        val streamType: String,
+    )
+
+    private var viewerConfig: ViewerTomlConfig? = null
 
     // ── 句柄 ──
     private var viewerHandle: Long = 0
@@ -75,6 +88,9 @@ class MainActivity : AppCompatActivity() {
         txtStreamInfo = findViewById(R.id.txt_stream_info)
         btnReconnect = findViewById(R.id.btn_reconnect)
 
+        // 加载 viewer.toml 配置
+        loadViewerConfig()
+
         // Surface 生命周期回调
         surfaceVideo.holder.addCallback(object : SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {
@@ -98,10 +114,16 @@ class MainActivity : AppCompatActivity() {
 
         // 连接按钮
         btnConnect.setOnClickListener {
-            val relay = inputRelay.text.toString().trim()
-            val deviceId = inputDeviceId.text.toString().trim()
-            if (relay.isNotEmpty() && deviceId.isNotEmpty()) {
-                startConnection(relay, deviceId)
+            // 优先使用 viewer.toml 配置，否则使用 UI 输入
+            val config = viewerConfig
+            if (config != null) {
+                startConnection(config.relays, config.camera, config.enableMdns, config.streamType, config.noAudio)
+            } else {
+                val relay = inputRelay.text.toString().trim()
+                val deviceId = inputDeviceId.text.toString().trim()
+                if (relay.isNotEmpty() && deviceId.isNotEmpty()) {
+                    startConnection(listOf(relay), deviceId)
+                }
             }
         }
 
@@ -124,8 +146,14 @@ class MainActivity : AppCompatActivity() {
     // 连接管理
     // ═══════════════════════════════════════════════
 
-    private fun startConnection(relay: String, deviceId: String) {
-        Log.i(TAG, "Starting connection: relay=$relay deviceId=$deviceId")
+    private fun startConnection(
+        relays: List<String>,
+        deviceId: String,
+        enableMdns: Boolean = false,
+        streamType: String = "auto",
+        noAudio: Boolean = false,
+    ) {
+        Log.i(TAG, "Starting connection: relays=$relays deviceId=$deviceId enableMdns=$enableMdns streamType=$streamType noAudio=$noAudio")
 
         // 销毁旧实例
         stopPolling()
@@ -142,9 +170,15 @@ class MainActivity : AppCompatActivity() {
         Log.i(TAG, "Created viewer handle: $viewerHandle")
 
         // 发送连接命令
+        val relaysArray = JSONArray().apply {
+            for (r in relays) put(r)
+        }
         val config = JSONObject().apply {
-            put("relays", listOf(relay))
+            put("relays", relaysArray)
             put("deviceId", deviceId)
+            put("enable_mdns", enableMdns)
+            put("stream_type", streamType)
+            put("no_audio", noAudio)
         }
         val ok = RustBridge.nativeConnect(viewerHandle, config.toString())
         if (!ok) {
@@ -167,6 +201,102 @@ class MainActivity : AppCompatActivity() {
         btnReconnect.visibility = View.GONE
         updateState("未连接")
         txtStreamInfo.text = ""
+    }
+
+    // ═══════════════════════════════════════════════
+    // viewer.toml 配置加载
+    // ═══════════════════════════════════════════════
+
+    /**
+     * 从 assets/viewer.toml 加载配置
+     *
+     * TOML 格式:
+     *   relays = ["/ip4/.../udp/.../quic-v1/p2p/12D3...", ...]
+     *   camera = "12D3KooW..."
+     *   no_audio = false
+     *   enable_mdns = false
+     *   stream_type = "auto"
+     */
+    private fun loadViewerConfig() {
+        try {
+            val toml = assets.open(VIEWER_TOML).bufferedReader().use { it.readText() }
+            val config = parseViewerToml(toml)
+            viewerConfig = config
+            Log.i(TAG, "Loaded $VIEWER_TOML: relays=${config.relays.size} camera=${config.camera} " +
+                    "noAudio=${config.noAudio} enableMdns=${config.enableMdns} streamType=${config.streamType}")
+
+            // 用配置值预填充 UI 输入框
+            if (config.relays.isNotEmpty()) {
+                inputRelay.setText(config.relays.joinToString(", "))
+            }
+            if (config.camera.isNotEmpty()) {
+                inputDeviceId.setText(config.camera)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load $VIEWER_TOML from assets: ${e.message}")
+            viewerConfig = null
+        }
+    }
+
+    /**
+     * 简易 TOML 解析器（仅支持 viewer.toml 所需的格式）
+     *
+     * 支持的格式:
+     *   key = "value"           -> 字符串
+     *   key = true/false        -> 布尔
+     *   key = ["a", "b", ...]   -> 字符串数组（可跨行）
+     */
+    private fun parseViewerToml(toml: String): ViewerTomlConfig {
+        var relays = listOf<String>()
+        var camera = ""
+        var noAudio = false
+        var enableMdns = false
+        var streamType = "auto"
+
+        // 将多行数组合并成单行（TOML 数组可跨行书写）
+        val normalized = toml.replace(Regex("\\r\\n?"), "\n")
+            .replace(Regex("\\n\\s*"), " ")
+
+        // 按顶层 key = value 解析
+        val pattern = Regex("""(\w+)\s*=\s*(.+?)(?=\s+\w+\s*=|$)""")
+        for (match in pattern.findAll(normalized)) {
+            val key = match.groupValues[1]
+            val value = match.groupValues[2].trim()
+
+            when (key) {
+                "relays" -> {
+                    // 解析 ["addr1", "addr2", ...]
+                    val arrayMatch = Regex("""\[(.*)]""").find(value)
+                    if (arrayMatch != null) {
+                        relays = arrayMatch.groupValues[1]
+                            .split(",")
+                            .map { it.trim().trim('"').trim() }
+                            .filter { it.isNotEmpty() }
+                    }
+                }
+                "camera" -> {
+                    camera = value.trim('"')
+                }
+                "no_audio" -> {
+                    noAudio = value.toBooleanStrictOrNull() ?: false
+                }
+                "enable_mdns" -> {
+                    enableMdns = value.toBooleanStrictOrNull() ?: false
+                }
+                "stream_type", "stream" -> {
+                    val s = value.trim('"')
+                    if (s.isNotEmpty()) streamType = s
+                }
+            }
+        }
+
+        return ViewerTomlConfig(
+            relays = relays,
+            camera = camera,
+            noAudio = noAudio,
+            enableMdns = enableMdns,
+            streamType = streamType,
+        )
     }
 
     // ═══════════════════════════════════════════════
