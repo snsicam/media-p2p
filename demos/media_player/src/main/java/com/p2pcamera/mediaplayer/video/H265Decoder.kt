@@ -33,7 +33,9 @@ class H265Decoder(private val width: Int = 1920, private val height: Int = 1080)
     private var started = false
     private var csdBuilt = false
     private val csd0 = ByteBuffer.allocate(65536)   // VPS+SPS+PPS
+    private val bufferInfo = MediaCodec.BufferInfo()
     private var fpsClock: Long = 0
+    private var csdWaitLogCount = 0
 
     // 统计
     var frameCount = 0L
@@ -59,35 +61,11 @@ class H265Decoder(private val width: Int = 1920, private val height: Int = 1080)
         Log.i(TAG, "Selected codec: $codecName")
 
         codec = MediaCodec.createByCodecName(codecName).apply {
-            setCallback(object : MediaCodec.Callback() {
-                override fun onInputBufferAvailable(codec: MediaCodec, index: Int) {
-                    // 输入由 feedFrame 主动驱动，不在此回调处理
-                    // 但我们可以在这里不做任何事情，因为 feedFrame 在主循环中调用
-                }
-
-                override fun onOutputBufferAvailable(
-                    codec: MediaCodec,
-                    index: Int,
-                    info: MediaCodec.BufferInfo
-                ) {
-                    codec.releaseOutputBuffer(index, true)
-                    lastPtsUs = info.presentationTimeUs
-                    frameCount++
-                }
-
-                override fun onError(codec: MediaCodec, e: MediaCodec.CodecException) {
-                    Log.e(TAG, "MediaCodec error: ${e.message}", e)
-                }
-
-                override fun onOutputFormatChanged(codec: MediaCodec, format: MediaFormat) {
-                    val w = format.getInteger(MediaFormat.KEY_WIDTH)
-                    val h = format.getInteger(MediaFormat.KEY_HEIGHT)
-                    Log.i(TAG, "Output format changed: ${w}x${h}")
-                }
-            })
+            // 同步模式: 由 feedFrame 主动 dequeue/queue，并在喂帧后 drain 输出渲染到 Surface
             configure(format, surface, null, 0)
         }
         csdBuilt = false
+        Log.i(TAG, "Codec configured (sync mode): $codecName")
     }
 
     /**
@@ -109,37 +87,69 @@ class H265Decoder(private val width: Int = 1920, private val height: Int = 1080)
     fun feedFrame(nalBytes: ByteArray, ptsUs: Long, isKeyframe: Boolean) {
         val codec = codec ?: return
         if (!started) return
-
-        // CSD 收集: 首帧前需要 VPS+SPS+PPS
-        if (!csdBuilt) {
-            collectCsd(nalBytes)
+        try {
+            // CSD 收集: 首帧前需要 VPS+SPS+PPS
             if (!csdBuilt) {
-                Log.d(TAG, "Waiting for CSD (VPS/SPS/PPS)...")
+                collectCsd(nalBytes)
+                if (!csdBuilt) {
+                    if (csdWaitLogCount < 20) {
+                        csdWaitLogCount++
+                        Log.d(TAG, "Waiting for CSD (VPS/SPS/PPS)... frame#$csdWaitLogCount")
+                    }
+                    return
+                }
+                // CSD 收集完毕，发送 Codec-Specific Data
+                sendCsd(codec)
+                Log.i(TAG, "CSD sent, decoder ready for frames")
+            }
+
+            val inputIndex = codec.dequeueInputBuffer(10_000) // 10ms timeout
+            if (inputIndex < 0) {
+                Log.w(TAG, "dequeueInputBuffer timeout, dropping frame")
                 return
             }
-            // CSD 收集完毕，发送 Codec-Specific Data
-            sendCsd(codec)
+
+            val inputBuffer = codec.getInputBuffer(inputIndex)!!
+            inputBuffer.clear()
+            inputBuffer.put(nalBytes)
+
+            var flags = 0
+            if (isKeyframe) {
+                flags = flags or MediaCodec.BUFFER_FLAG_KEY_FRAME
+            }
+
+            codec.queueInputBuffer(inputIndex, 0, nalBytes.size, ptsUs, flags)
+
+            // 同步模式: 主动 drain 输出并渲染到 Surface
+            drainOutputs(codec)
+
+            // 首帧时钟
+            if (fpsClock == 0L) fpsClock = ptsUs
+        } catch (e: Exception) {
+            Log.e(TAG, "feedFrame error: ${e.message}", e)
         }
+    }
 
-        val inputIndex = codec.dequeueInputBuffer(10_000) // 10ms timeout
-        if (inputIndex < 0) {
-            Log.w(TAG, "dequeueInputBuffer timeout, dropping frame")
-            return
+    /**
+     * 同步模式: 取出所有已解码输出 buffer 并渲染到 Surface
+     */
+    private fun drainOutputs(codec: MediaCodec) {
+        var outIndex = codec.dequeueOutputBuffer(bufferInfo, 0)
+        while (outIndex >= 0) {
+            codec.releaseOutputBuffer(outIndex, true) // true = render to surface
+            lastPtsUs = bufferInfo.presentationTimeUs
+            frameCount++
+            if (frameCount <= 3 || frameCount % 100 == 0L) {
+                Log.i(TAG, "Rendered frame #$frameCount pts=${bufferInfo.presentationTimeUs}")
+            }
+            outIndex = codec.dequeueOutputBuffer(bufferInfo, 0)
         }
-
-        val inputBuffer = codec.getInputBuffer(inputIndex)!!
-        inputBuffer.clear()
-        inputBuffer.put(nalBytes)
-
-        var flags = 0
-        if (isKeyframe) {
-            flags = flags or MediaCodec.BUFFER_FLAG_KEY_FRAME
+        if (outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+            val f = codec.outputFormat
+            val w = f.getInteger(MediaFormat.KEY_WIDTH)
+            val h = f.getInteger(MediaFormat.KEY_HEIGHT)
+            Log.i(TAG, "Output format changed: ${w}x${h}")
         }
-
-        codec.queueInputBuffer(inputIndex, 0, nalBytes.size, ptsUs, flags)
-
-        // 首帧时钟
-        if (fpsClock == 0L) fpsClock = ptsUs
     }
 
     /**
@@ -168,21 +178,54 @@ class H265Decoder(private val width: Int = 1920, private val height: Int = 1080)
      */
     private fun collectCsd(nalBytes: ByteArray) {
         if (nalBytes.isEmpty()) return
-        val nalType = (nalBytes[0].toInt() shr 1) and 0x3F
-        when (nalType) {
-            NAL_VPS, NAL_SPS, NAL_PPS -> {
-                Log.i(TAG, "CSD NAL type: $nalType (${nalBytes.size} bytes)")
-                // 每个 NAL 前加 4 字节起始码 0x00000001
-                csd0.put(byteArrayOf(0, 0, 0, 1))
-                csd0.put(nalBytes)
-
-                // 收到 PPS 后 CSD 完整
+        var i = 0
+        val len = nalBytes.size
+        // RK VENC (pack_mode=0) 一个 pack 内含多个 NAL (VPS/SPS/PPS/IDR...) 拼接,
+        // 每个 NAL 前带 Annex-B 起始码 (00 00 00 01 或 00 00 01)。
+        // 必须跳过起始码逐 NAL 扫描, 不能只看 nalBytes[0] (那是起始码的 0x00)。
+        while (i + 2 < len) {
+            val b0 = nalBytes[i].toInt() and 0xFF
+            val b1 = nalBytes[i + 1].toInt() and 0xFF
+            val b2 = nalBytes[i + 2].toInt() and 0xFF
+            val has4 = i + 3 < len
+            val b3 = if (has4) nalBytes[i + 3].toInt() and 0xFF else -1
+            val hdr: Int
+            if (has4 && b0 == 0 && b1 == 0 && b2 == 0 && b3 == 1) {
+                hdr = i + 4
+            } else if (b0 == 0 && b1 == 0 && b2 == 1) {
+                hdr = i + 3
+            } else {
+                i++
+                continue
+            }
+            if (hdr >= len) break
+            val nalType = (nalBytes[hdr].toInt() shr 1) and 0x3F
+            if (nalType == NAL_VPS || nalType == NAL_SPS || nalType == NAL_PPS) {
+                // 找下一个起始码作为本 NAL 的结束边界
+                var end = hdr + 1
+                while (end + 2 < len) {
+                    val e0 = nalBytes[end].toInt() and 0xFF
+                    val e1 = nalBytes[end + 1].toInt() and 0xFF
+                    val e2 = nalBytes[end + 2].toInt() and 0xFF
+                    val e3 = if (end + 3 < len) nalBytes[end + 3].toInt() and 0xFF else -1
+                    if ((e0 == 0 && e1 == 0 && e2 == 0 && e3 == 1) ||
+                        (e0 == 0 && e1 == 0 && e2 == 1)) {
+                        break
+                    }
+                    end++
+                }
+                if (end + 2 >= len) end = len
+                // 追加到 CSD-0: 4 字节起始码 + NAL 数据
+                csd0.put(0.toByte()); csd0.put(0.toByte()); csd0.put(0.toByte()); csd0.put(1.toByte())
+                csd0.put(nalBytes, hdr, end - hdr)
+                Log.i(TAG, "CSD NAL type: $nalType (${end - hdr} bytes)")
                 if (nalType == NAL_PPS) {
                     csd0.flip()
                     csdBuilt = true
                     Log.i(TAG, "CSD-0 built: ${csd0.limit()} bytes (VPS+SPS+PPS)")
                 }
             }
+            i = hdr
         }
     }
 

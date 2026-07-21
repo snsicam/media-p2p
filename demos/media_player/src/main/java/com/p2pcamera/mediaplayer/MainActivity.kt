@@ -318,12 +318,15 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 // ── 视频帧 ──
+                // Rust 视频帧格式: [PTS 8B] + [flags 1B] + [H.265 NAL data]
+                // 关键帧用 Rust 转发的 flags bit 2 (0x04) 判定，权威且无需重复字节扫描
                 if (streamReady && decoderConfigured) {
                     val raw = RustBridge.nativePollVideoFrame(viewerHandle)
-                    if (raw != null && raw.size > 8) {
+                    if (raw != null && raw.size > 9) {
                         val ptsUs = extractPtsUs(raw)
-                        val nalData = extractFrameData(raw)
-                        val isKeyframe = isKeyframeNal(nalData)
+                        val flags = extractVideoFlags(raw)
+                        val nalData = extractVideoFrameData(raw)
+                        val isKeyframe = (flags and 0x04) != 0
                         decoder?.feedFrame(nalData, ptsUs, isKeyframe)
                     }
                 }
@@ -365,7 +368,13 @@ class MainActivity : AppCompatActivity() {
                     }
                     "Connected" -> {
                         val connType = event.optString("connection_type", "relay")
-                        updateState(if (connType == "direct") "直连" else "已连接 (Relay)")
+                        Log.i(TAG, "Connection type: $connType")
+                        updateState(if (connType == "relay") "已连接 (Relay)" else "直连 ($connType)")
+                    }
+                    "DirectUpgraded" -> {
+                        val connType = event.optString("connection_type", "DCUtR")
+                        Log.i(TAG, "Direct upgraded: $connType (stream sub → main)")
+                        updateState("直连 ($connType)")
                     }
                     "StreamReady" -> {
                         streamReady = true
@@ -423,20 +432,5 @@ class MainActivity : AppCompatActivity() {
 
     private fun hideConnectPanel() {
         panelConnect.visibility = View.GONE
-    }
-
-    // ═══════════════════════════════════════════════
-    // NAL 工具
-    // ═══════════════════════════════════════════════
-
-    /**
-     * 判断 NAL 数据是否包含 IDR 关键帧
-     * H.265 NAL header: (byte[0] >> 1) & 0x3F
-     * IDR_W_RADL=19, IDR_N_LP=20
-     */
-    private fun isKeyframeNal(nalData: ByteArray): Boolean {
-        if (nalData.isEmpty()) return false
-        val nalType = (nalData[0].toInt() shr 1) and 0x3F
-        return nalType == 19 || nalType == 20
     }
 }
