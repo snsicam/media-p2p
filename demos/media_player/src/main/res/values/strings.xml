@@ -21,21 +21,17 @@
 
     <!-- 设备右键(长按)菜单 -->
     <string name="menu_play">播放</string>
-    <string name="menu_rename">重命名</string>
     <string name="menu_config">配置</string>
     <string name="menu_delete">删除</string>
 
     <!-- 添加设备对话框 -->
     <string name="dlg_add_title">添加设备</string>
-    <string name="hint_peer_id">设备 ID（SN，如 e33700a6620dfddc）</string>
-    <string name="hint_alias">别名 (可选, 留空显示设备 ID)</string>
+    <string name="hint_peer_id">16位序列号 SN（如 e33700a6620dfddc）</string>
     <string name="btn_add">添加</string>
     <string name="btn_cancel">取消</string>
-    <string name="toast_empty_peer">设备 ID 不能为空</string>
+    <string name="toast_empty_peer">序列号不能为空</string>
     <string name="toast_dup_peer">该设备已存在</string>
-
-    <!-- 重命名对话框 -->
-    <string name="dlg_rename_title">重命名设备</string>
+    <string name="toast_no_device">没有可删除的设备</string>
 
     <!-- 删除确认 -->
     <string name="dlg_delete_title">删除设备</string>
@@ -85,4 +81,9 @@
     <string name="cfg_sharpness">锐度 (0~100)</string>
     <string name="cfg_width">宽 (width)</string>
     <string name="cfg_height">高 (height)</string>
+
+    <!-- 配置窗体分段 tab（与 viewer 配置窗体分区一致） -->
+    <string name="cfg_tab_encode">编码</string>
+    <string name="cfg_tab_image">图像</string>
+    <string name="cfg_tab_system">系统</string>
 </resources>

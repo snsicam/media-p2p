@@ -48,8 +48,8 @@ class MainActivity : AppCompatActivity() {
         private const val DEVICES_FILE = "devices.json"
     }
 
-    /** 设备模型: id 为设备标识（SN 或完整 PeerId 均可，Rust 侧自动判定）; alias 可选（为空显示 id） */
-    data class Device(val peerId: String, val alias: String?)
+    /** 设备模型: peerId 为设备标识（16位序列号 SN 或完整 PeerId 均可，Rust 侧自动判定） */
+    data class Device(val peerId: String)
 
     // ── viewer.toml 配置（relays / 默认设备等） ──
     data class ViewerTomlConfig(
@@ -128,6 +128,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnAddDevice.setOnClickListener { showAddDeviceDialog() }
+        // 删除设备: 与"添加设备"并排的按钮, 弹出设备列表选择要删除的项
+        findViewById<Button>(R.id.btn_delete_device).setOnClickListener { showDeleteDevicePicker() }
 
         // 加载 viewer.toml（出厂默认 + relays）
         loadViewerConfig()
@@ -157,7 +159,7 @@ class MainActivity : AppCompatActivity() {
 
         // 重连按钮
         btnReconnect.setOnClickListener {
-            currentDeviceId?.let { id -> connectToDevice(Device(id, null)) }
+            currentDeviceId?.let { id -> connectToDevice(Device(id)) }
         }
     }
 
@@ -188,8 +190,7 @@ class MainActivity : AppCompatActivity() {
                     val o = arr.getJSONObject(i)
                     val peer = o.optString("peerId", "")
                     if (peer.isNotEmpty()) {
-                        val alias = if (o.isNull("alias")) null else o.optString("alias")
-                        list.add(Device(peer, alias))
+                        list.add(Device(peer))
                     }
                 }
                 list
@@ -205,7 +206,6 @@ class MainActivity : AppCompatActivity() {
                 for (d in list) {
                     val o = JSONObject()
                     o.put("peerId", d.peerId)
-                    if (d.alias != null) o.put("alias", d.alias) else o.put("alias", JSONObject.NULL)
                     arr.put(o)
                 }
                 File(ctx.filesDir, DEVICES_FILE).writeText(arr.toString())
@@ -221,7 +221,7 @@ class MainActivity : AppCompatActivity() {
         if (loaded.isEmpty()) {
             val seed = viewerConfig?.cameras ?: emptyList()
             if (seed.isNotEmpty()) {
-                loaded = seed.map { Device(it, null) }
+                loaded = seed.map { Device(it) }
                 DeviceStore.save(this, loaded)
                 Log.i(TAG, "Seeded ${loaded.size} devices from $VIEWER_TOML")
             }
@@ -238,18 +238,16 @@ class MainActivity : AppCompatActivity() {
     private fun showDeviceContextMenu(dev: Device) {
         val items = arrayOf(
             getString(R.string.menu_play),
-            getString(R.string.menu_rename),
             getString(R.string.menu_config),
             getString(R.string.menu_delete),
         )
         AlertDialog.Builder(this)
-            .setTitle(dev.alias ?: shortId(dev.peerId))
+            .setTitle(shortId(dev.peerId))
             .setItems(items) { _, which ->
                 when (which) {
                     0 -> connectToDevice(dev)
-                    1 -> showRenameDialog(dev)
-                    2 -> openConfig(dev)
-                    3 -> showDeleteConfirm(dev)
+                    1 -> openConfig(dev)
+                    2 -> showDeleteConfirm(dev)
                 }
             }
             .show()
@@ -272,36 +270,9 @@ class MainActivity : AppCompatActivity() {
                 val id = etId.text.toString().trim()
                 if (id.isEmpty()) { toast(R.string.toast_empty_peer); return@setPositiveButton }
                 if (devices.any { it.peerId == id }) { toast(R.string.toast_dup_peer); return@setPositiveButton }
-                devices.add(Device(id, null))
+                devices.add(Device(id))
                 DeviceStore.save(this, devices)
                 deviceAdapter.notifyDataSetChanged()
-            }
-            .setNegativeButton(R.string.btn_cancel, null)
-            .show()
-    }
-
-    private fun showRenameDialog(dev: Device) {
-        val et = EditText(this).apply {
-            setText(dev.alias ?: "")
-            hint = getString(R.string.hint_alias)
-            inputType = InputType.TYPE_CLASS_TEXT
-        }
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(50, 40, 50, 10)
-            addView(et)
-        }
-        AlertDialog.Builder(this)
-            .setTitle(R.string.dlg_rename_title)
-            .setView(layout)
-            .setPositiveButton(R.string.btn_add) { _, _ ->
-                val alias = et.text.toString().trim().ifEmpty { null }
-                val idx = devices.indexOf(dev)
-                if (idx >= 0) {
-                    devices[idx] = dev.copy(alias = alias)
-                    DeviceStore.save(this, devices)
-                    deviceAdapter.notifyDataSetChanged()
-                }
             }
             .setNegativeButton(R.string.btn_cancel, null)
             .show()
@@ -316,6 +287,23 @@ class MainActivity : AppCompatActivity() {
                 DeviceStore.save(this, devices)
                 deviceAdapter.notifyDataSetChanged()
                 if (currentDeviceId == dev.peerId) stopCurrent()
+            }
+            .setNegativeButton(R.string.btn_cancel, null)
+            .show()
+    }
+
+    /** 面板"删除设备"按钮: 弹出设备列表, 选择一项后走删除确认 */
+    private fun showDeleteDevicePicker() {
+        if (devices.isEmpty()) {
+            toast(R.string.toast_no_device)
+            return
+        }
+        val names = devices.map { shortId(it.peerId) }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle(R.string.dlg_delete_title)
+            .setItems(names) { _, which ->
+                val dev = devices.getOrNull(which) ?: return@setItems
+                showDeleteConfirm(dev)
             }
             .setNegativeButton(R.string.btn_cancel, null)
             .show()
@@ -457,6 +445,31 @@ class MainActivity : AppCompatActivity() {
         val editSharp = view.findViewById<EditText>(R.id.edit_sharpness)
         val editName = view.findViewById<EditText>(R.id.edit_name)
         val camId = 0
+
+        // 分段 tab: 编码 / 图像 / 系统（与 viewer 配置窗体分区一致）
+        val tabEncode = view.findViewById<Button>(R.id.tab_encode)
+        val tabImage = view.findViewById<Button>(R.id.tab_image)
+        val tabSystem = view.findViewById<Button>(R.id.tab_system)
+        val llEncode = view.findViewById<LinearLayout>(R.id.ll_encode)
+        val llImage = view.findViewById<LinearLayout>(R.id.ll_image)
+        val llSystem = view.findViewById<LinearLayout>(R.id.ll_system)
+        val tabBgSel = 0xFF3F6EFF.toInt()
+        val tabBgUnsel = 0xFF222222.toInt()
+        fun selectConfigTab(which: Int) {
+            llEncode.visibility = if (which == 0) View.VISIBLE else View.GONE
+            llImage.visibility = if (which == 1) View.VISIBLE else View.GONE
+            llSystem.visibility = if (which == 2) View.VISIBLE else View.GONE
+            tabEncode.setBackgroundColor(if (which == 0) tabBgSel else tabBgUnsel)
+            tabImage.setBackgroundColor(if (which == 1) tabBgSel else tabBgUnsel)
+            tabSystem.setBackgroundColor(if (which == 2) tabBgSel else tabBgUnsel)
+            tabEncode.setTextColor(if (which == 0) Color.WHITE else Color.GRAY)
+            tabImage.setTextColor(if (which == 1) Color.WHITE else Color.GRAY)
+            tabSystem.setTextColor(if (which == 2) Color.WHITE else Color.GRAY)
+        }
+        tabEncode.setOnClickListener { selectConfigTab(0) }
+        tabImage.setOnClickListener { selectConfigTab(1) }
+        tabSystem.setOnClickListener { selectConfigTab(2) }
+        selectConfigTab(0)
 
         val dialog = AlertDialog.Builder(this)
             .setTitle("${getString(R.string.dlg_config_title)}  ${shortId(peer)}")
@@ -846,7 +859,7 @@ class MainActivity : AppCompatActivity() {
             val name = view.findViewById<TextView>(R.id.txt_device_name)
             val status = view.findViewById<TextView>(R.id.txt_device_status)
 
-            name.text = dev.alias ?: shortId(dev.peerId)
+            name.text = shortId(dev.peerId)
 
             val isCurrent = dev.peerId == currentDeviceId
             when {

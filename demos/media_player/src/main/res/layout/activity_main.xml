@@ -46,13 +46,30 @@
             android:textSize="11sp"
             android:padding="10dp" />
 
-        <Button
-            android:id="@+id/btn_add_device"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/dlg_add_title"
-            android:textSize="13sp"
-            android:layout_margin="8dp" />
+            android:orientation="horizontal"
+            android:layout_margin="8dp">
+
+            <Button
+                android:id="@+id/btn_add_device"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:text="@string/dlg_add_title"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btn_delete_device"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:text="@string/dlg_delete_title"
+                android:textSize="13sp" />
+        </LinearLayout>
     </LinearLayout>
 
     <!-- 右侧视频 SurfaceView -->

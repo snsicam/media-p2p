@@ -9,204 +9,274 @@
         android:orientation="vertical"
         android:padding="16dp">
 
+        <!-- 码流选择（全局, 编码参数按码流读取, 放 tab 之上） -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/cfg_stream"
             android:textColor="#CCCCCC"
-            android:textSize="13sp"
-            android:layout_marginTop="4dp" />
+            android:textSize="13sp" />
         <Spinner
             android:id="@+id/spin_stream"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:entries="@array/stream_entries" />
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/cfg_codec"
-            android:textColor="#CCCCCC"
-            android:textSize="13sp"
-            android:layout_marginTop="8dp" />
-        <Spinner
-            android:id="@+id/spin_codec"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:entries="@array/codec_entries" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/cfg_rc_mode"
-            android:textColor="#CCCCCC"
-            android:textSize="13sp"
-            android:layout_marginTop="8dp" />
-        <Spinner
-            android:id="@+id/spin_rc_mode"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:entries="@array/rc_mode_entries" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/cfg_resolution"
-            android:textColor="#CCCCCC"
-            android:textSize="13sp"
-            android:layout_marginTop="8dp" />
+        <!-- 分段 tab: 编码 / 图像 / 系统（与 viewer 配置窗体一致） -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
-            <EditText
-                android:id="@+id/edit_width"
+            android:layout_marginTop="12dp">
+
+            <Button
+                android:id="@+id/tab_encode"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
+                android:text="@string/cfg_tab_encode"
+                android:textSize="13sp"
+                android:stateListAnimator="@null" />
+
+            <Button
+                android:id="@+id/tab_image"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:text="@string/cfg_tab_image"
+                android:textSize="13sp"
+                android:stateListAnimator="@null" />
+
+            <Button
+                android:id="@+id/tab_system"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:text="@string/cfg_tab_system"
+                android:textSize="13sp"
+                android:stateListAnimator="@null" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#333333"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
+
+        <!-- ===== 编码 ===== -->
+        <LinearLayout
+            android:id="@+id/ll_encode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/cfg_codec"
+                android:textColor="#CCCCCC"
+                android:textSize="13sp"
+                android:layout_marginTop="4dp" />
+            <Spinner
+                android:id="@+id/spin_codec"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:entries="@array/codec_entries" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/cfg_rc_mode"
+                android:textColor="#CCCCCC"
+                android:textSize="13sp"
+                android:layout_marginTop="8dp" />
+            <Spinner
+                android:id="@+id/spin_rc_mode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:entries="@array/rc_mode_entries" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/cfg_resolution"
+                android:textColor="#CCCCCC"
+                android:textSize="13sp"
+                android:layout_marginTop="8dp" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+                <EditText
+                    android:id="@+id/edit_width"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:inputType="number"
+                    android:hint="@string/cfg_width"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="x"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:layout_marginStart="6dp"
+                    android:layout_marginEnd="6dp" />
+                <EditText
+                    android:id="@+id/edit_height"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:inputType="number"
+                    android:hint="@string/cfg_height"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/cfg_fps"
+                android:textColor="#CCCCCC"
+                android:textSize="13sp"
+                android:layout_marginTop="8dp" />
+            <EditText
+                android:id="@+id/edit_fps"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
                 android:inputType="number"
-                android:hint="@string/cfg_width"
                 android:textColor="#FFFFFF"
                 android:textSize="14sp" />
+
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="x"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:layout_marginStart="6dp"
-                android:layout_marginEnd="6dp" />
+                android:text="@string/cfg_bitrate"
+                android:textColor="#CCCCCC"
+                android:textSize="13sp"
+                android:layout_marginTop="8dp" />
             <EditText
-                android:id="@+id/edit_height"
-                android:layout_width="0dp"
+                android:id="@+id/edit_bitrate"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:inputType="number"
-                android:hint="@string/cfg_height"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/cfg_gop"
+                android:textColor="#CCCCCC"
+                android:textSize="13sp"
+                android:layout_marginTop="8dp" />
+            <EditText
+                android:id="@+id/edit_gop"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"
                 android:textColor="#FFFFFF"
                 android:textSize="14sp" />
         </LinearLayout>
 
-        <TextView
+        <!-- ===== 图像 ===== -->
+        <LinearLayout
+            android:id="@+id/ll_image"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/cfg_fps"
-            android:textColor="#CCCCCC"
-            android:textSize="13sp"
-            android:layout_marginTop="8dp" />
-        <EditText
-            android:id="@+id/edit_fps"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="number"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp" />
+            android:orientation="vertical"
+            android:visibility="gone">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/cfg_bitrate"
-            android:textColor="#CCCCCC"
-            android:textSize="13sp"
-            android:layout_marginTop="8dp" />
-        <EditText
-            android:id="@+id/edit_bitrate"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="number"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/cfg_brightness"
+                android:textColor="#CCCCCC"
+                android:textSize="13sp"
+                android:layout_marginTop="4dp" />
+            <EditText
+                android:id="@+id/edit_brightness"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="numberSigned"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp" />
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/cfg_gop"
-            android:textColor="#CCCCCC"
-            android:textSize="13sp"
-            android:layout_marginTop="8dp" />
-        <EditText
-            android:id="@+id/edit_gop"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="number"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/cfg_contrast"
+                android:textColor="#CCCCCC"
+                android:textSize="13sp"
+                android:layout_marginTop="8dp" />
+            <EditText
+                android:id="@+id/edit_contrast"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="numberSigned"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp" />
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/cfg_brightness"
-            android:textColor="#CCCCCC"
-            android:textSize="13sp"
-            android:layout_marginTop="8dp" />
-        <EditText
-            android:id="@+id/edit_brightness"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="numberSigned"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/cfg_saturation"
+                android:textColor="#CCCCCC"
+                android:textSize="13sp"
+                android:layout_marginTop="8dp" />
+            <EditText
+                android:id="@+id/edit_saturation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="numberSigned"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp" />
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/cfg_contrast"
-            android:textColor="#CCCCCC"
-            android:textSize="13sp"
-            android:layout_marginTop="8dp" />
-        <EditText
-            android:id="@+id/edit_contrast"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="numberSigned"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/cfg_sharpness"
+                android:textColor="#CCCCCC"
+                android:textSize="13sp"
+                android:layout_marginTop="8dp" />
+            <EditText
+                android:id="@+id/edit_sharpness"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp" />
+        </LinearLayout>
 
-        <TextView
+        <!-- ===== 系统 ===== -->
+        <LinearLayout
+            android:id="@+id/ll_system"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/cfg_saturation"
-            android:textColor="#CCCCCC"
-            android:textSize="13sp"
-            android:layout_marginTop="8dp" />
-        <EditText
-            android:id="@+id/edit_saturation"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="numberSigned"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp" />
+            android:orientation="vertical"
+            android:visibility="gone">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/cfg_sharpness"
-            android:textColor="#CCCCCC"
-            android:textSize="13sp"
-            android:layout_marginTop="8dp" />
-        <EditText
-            android:id="@+id/edit_sharpness"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="number"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/cfg_name"
-            android:textColor="#CCCCCC"
-            android:textSize="13sp"
-            android:layout_marginTop="8dp" />
-        <EditText
-            android:id="@+id/edit_name"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="text"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/cfg_name"
+                android:textColor="#CCCCCC"
+                android:textSize="13sp"
+                android:layout_marginTop="4dp" />
+            <EditText
+                android:id="@+id/edit_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp" />
+        </LinearLayout>
 
     </LinearLayout>
 </ScrollView>
