@@ -20,8 +20,13 @@ object RustBridge {
 
     // ── 控制 ──
     // json: {"relays":["/ip4/.../tcp/.../p2p/..."],"deviceId":"12D3...",
-    //        "enable_mdns":false,"stream_type":"auto","no_audio":false}
+    //        "enable_mdns":false,"stream_type":"auto","no_audio":false,
+    //        "serial_map":{"<sn>":"<peerid>",...}}  // 可选: 本地解析 SN 走 LAN 直连
     external fun nativeConnect(handle: Long, json: String): Boolean
+
+    // 设备配置下发 (控制通道): 传入 ControlRequest JSON, 返回 ControlResponse JSON
+    // 同步阻塞 (最长 5s), 调用方须在后台线程执行
+    external fun nativeSendControlCommand(handle: Long, json: String): String?
 
     // ── 数据轮询（非阻塞, 无帧时返回 null） ──
     // 视频返回格式: [PTS(8B big-endian i64 µs)] + [flags(1B)] + [H.265 NAL data]

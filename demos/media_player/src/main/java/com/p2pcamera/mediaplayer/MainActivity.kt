@@ -1,13 +1,16 @@
 package com.p2pcamera.mediaplayer
 
+import android.graphics.Color
 import android.os.Bundle
+import android.text.InputType
 import android.util.Log
+import android.view.LayoutInflater
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
-import android.widget.Button
-import android.widget.EditText
-import android.widget.TextView
+import android.view.ViewGroup
+import android.widget.*
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.p2pcamera.mediaplayer.audio.PcmAudioPlayer
@@ -19,16 +22,22 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
 /**
- * P2P Camera Media Player 主界面
+ * P2P Camera Media Player 主界面（横屏）
  *
- * 生命周期:
- *   1. onCreate → 初始化 UI
- *   2. 用户输入 relay + deviceId → 点击连接
- *   3. nativeCreate + nativeConnect → 等 StreamReady 事件
- *   4. 启动 H265Decoder + PcmAudioPlayer
- *   5. 主轮询循环: video → decoder, audio → player, events → UI
+ * 布局: 左侧设备管理面板（设备列表），右侧视频画面。
+ *
+ * 设备管理（SN 模式，运行时持久化到 App 内部存储 devices.json）:
+ *   - 点击设备 → 连接播放
+ *   - 长按设备 → 菜单: 播放 / 重命名 / 配置 / 删除
+ *   - 面板底部「添加设备」按钮 → 仅需输入设备 ID（SN）
+ *   - 设备 ID 直接透传给 Rust 连接层；Rust 侧 viewer.rs 会自动判定其为
+ *     完整 PeerId 还是短序列号(SN)，SN 经 relay 注册表解析出真实 PeerId 再连接。
+ *   - 「配置」走 Rust 控制通道 (nativeSendControlCommand) 读取/下发摄像头编码/图像/系统参数
+ *
+ * viewer.toml 仅作为出厂默认种子（首次启动时若无已存设备则写入内部存储）。
  */
 class MainActivity : AppCompatActivity() {
 
@@ -36,15 +45,21 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "MediaPlayer"
         private const val POLL_INTERVAL_MS = 5L
         private const val VIEWER_TOML = "viewer.toml"
+        private const val DEVICES_FILE = "devices.json"
     }
 
-    // ── viewer.toml 配置 ──
+    /** 设备模型: id 为设备标识（SN 或完整 PeerId 均可，Rust 侧自动判定）; alias 可选（为空显示 id） */
+    data class Device(val peerId: String, val alias: String?)
+
+    // ── viewer.toml 配置（relays / 默认设备等） ──
     data class ViewerTomlConfig(
         val relays: List<String>,
-        val camera: String,
+        val cameras: List<String>,
         val noAudio: Boolean,
         val enableMdns: Boolean,
         val streamType: String,
+        /** 本地 serial→PeerId 静态映射；命中时无需 Relay 即可解析 SN 走 LAN 直连 */
+        val serialMap: Map<String, String> = emptyMap(),
     )
 
     private var viewerConfig: ViewerTomlConfig? = null
@@ -64,32 +79,60 @@ class MainActivity : AppCompatActivity() {
     private var surfaceReady = false
     private var decoderConfigured = false
 
+    // 当前正在连接/播放的设备 PeerId（null 表示未连接）
+    private var currentDeviceId: String? = null
+
+    // 配置弹窗: 等待连接建立后再拉取参数
+    private var pendingConfigPeer: String? = null
+    // 配置弹窗当前编辑的码流
+    private var configStream = "main"
+
     // ── UI ──
     private lateinit var surfaceVideo: SurfaceView
-    private lateinit var panelConnect: View
-    private lateinit var inputRelay: EditText
-    private lateinit var inputDeviceId: EditText
-    private lateinit var btnConnect: Button
+    private lateinit var listDevices: ListView
+    private lateinit var txtPlaceholder: TextView
     private lateinit var txtState: TextView
     private lateinit var txtStreamInfo: TextView
     private lateinit var btnReconnect: Button
+    private lateinit var btnAddDevice: Button
     private var surface: android.view.Surface? = null
+
+    // 设备列表数据源（持久化到内部存储）
+    private val devices = mutableListOf<Device>()
+    private lateinit var deviceAdapter: DeviceAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         surfaceVideo = findViewById(R.id.surface_video)
-        panelConnect = findViewById(R.id.panel_connect)
-        inputRelay = findViewById(R.id.input_relay)
-        inputDeviceId = findViewById(R.id.input_device_id)
-        btnConnect = findViewById(R.id.btn_connect)
+        listDevices = findViewById(R.id.list_devices)
+        txtPlaceholder = findViewById(R.id.txt_placeholder)
         txtState = findViewById(R.id.txt_state)
         txtStreamInfo = findViewById(R.id.txt_stream_info)
         btnReconnect = findViewById(R.id.btn_reconnect)
+        btnAddDevice = findViewById(R.id.btn_add_device)
 
-        // 加载 viewer.toml 配置
+        // 设备列表适配器
+        deviceAdapter = DeviceAdapter()
+        listDevices.adapter = deviceAdapter
+        listDevices.setOnItemClickListener { _, _, position, _ ->
+            val dev = devices.getOrNull(position) ?: return@setOnItemClickListener
+            connectToDevice(dev)
+        }
+        // 长按 → 设备菜单（播放 / 重命名 / 配置 / 删除）
+        listDevices.setOnItemLongClickListener { _, _, position, _ ->
+            val dev = devices.getOrNull(position) ?: return@setOnItemLongClickListener true
+            showDeviceContextMenu(dev)
+            true
+        }
+
+        btnAddDevice.setOnClickListener { showAddDeviceDialog() }
+
+        // 加载 viewer.toml（出厂默认 + relays）
         loadViewerConfig()
+        // 设备列表: 优先读内部存储，空则种入 viewer.toml 的默认设备
+        loadDevices()
 
         // Surface 生命周期回调
         surfaceVideo.holder.addCallback(object : SurfaceHolder.Callback {
@@ -112,23 +155,10 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        // 连接按钮
-        btnConnect.setOnClickListener {
-            // 优先使用 viewer.toml 配置，否则使用 UI 输入
-            val config = viewerConfig
-            if (config != null) {
-                startConnection(config.relays, config.camera, config.enableMdns, config.streamType, config.noAudio)
-            } else {
-                val relay = inputRelay.text.toString().trim()
-                val deviceId = inputDeviceId.text.toString().trim()
-                if (relay.isNotEmpty() && deviceId.isNotEmpty()) {
-                    startConnection(listOf(relay), deviceId)
-                }
-            }
-        }
-
         // 重连按钮
-        btnReconnect.setOnClickListener { reconnect() }
+        btnReconnect.setOnClickListener {
+            currentDeviceId?.let { id -> connectToDevice(Device(id, null)) }
+        }
     }
 
     override fun onDestroy() {
@@ -143,8 +173,198 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ═══════════════════════════════════════════════
+    // 设备列表持久化（App 内部存储）
+    // ═══════════════════════════════════════════════
+
+    /** 设备存储: 读写 /data/data/.../files/devices.json */
+    private object DeviceStore {
+        fun load(ctx: MainActivity): List<Device> {
+            val f = File(ctx.filesDir, DEVICES_FILE)
+            if (!f.exists()) return emptyList()
+            return try {
+                val arr = JSONArray(f.readText())
+                val list = mutableListOf<Device>()
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    val peer = o.optString("peerId", "")
+                    if (peer.isNotEmpty()) {
+                        val alias = if (o.isNull("alias")) null else o.optString("alias")
+                        list.add(Device(peer, alias))
+                    }
+                }
+                list
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to load $DEVICES_FILE: ${e.message}")
+                emptyList()
+            }
+        }
+
+        fun save(ctx: MainActivity, list: List<Device>) {
+            try {
+                val arr = JSONArray()
+                for (d in list) {
+                    val o = JSONObject()
+                    o.put("peerId", d.peerId)
+                    if (d.alias != null) o.put("alias", d.alias) else o.put("alias", JSONObject.NULL)
+                    arr.put(o)
+                }
+                File(ctx.filesDir, DEVICES_FILE).writeText(arr.toString())
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to save $DEVICES_FILE: ${e.message}", e)
+            }
+        }
+    }
+
+    /** 加载设备列表: 内部存储优先, 空则种入 viewer.toml 默认设备 */
+    private fun loadDevices() {
+        var loaded = DeviceStore.load(this)
+        if (loaded.isEmpty()) {
+            val seed = viewerConfig?.cameras ?: emptyList()
+            if (seed.isNotEmpty()) {
+                loaded = seed.map { Device(it, null) }
+                DeviceStore.save(this, loaded)
+                Log.i(TAG, "Seeded ${loaded.size} devices from $VIEWER_TOML")
+            }
+        }
+        devices.clear()
+        devices.addAll(loaded)
+        deviceAdapter.notifyDataSetChanged()
+    }
+
+    // ═══════════════════════════════════════════════
+    // 设备菜单 / 增删 / 重命名
+    // ═══════════════════════════════════════════════
+
+    private fun showDeviceContextMenu(dev: Device) {
+        val items = arrayOf(
+            getString(R.string.menu_play),
+            getString(R.string.menu_rename),
+            getString(R.string.menu_config),
+            getString(R.string.menu_delete),
+        )
+        AlertDialog.Builder(this)
+            .setTitle(dev.alias ?: shortId(dev.peerId))
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> connectToDevice(dev)
+                    1 -> showRenameDialog(dev)
+                    2 -> openConfig(dev)
+                    3 -> showDeleteConfirm(dev)
+                }
+            }
+            .show()
+    }
+
+    private fun showAddDeviceDialog() {
+        val etId = EditText(this).apply {
+            hint = getString(R.string.hint_peer_id)
+            inputType = InputType.TYPE_CLASS_TEXT
+        }
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(50, 40, 50, 10)
+            addView(etId)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.dlg_add_title)
+            .setView(layout)
+            .setPositiveButton(R.string.btn_add) { _, _ ->
+                val id = etId.text.toString().trim()
+                if (id.isEmpty()) { toast(R.string.toast_empty_peer); return@setPositiveButton }
+                if (devices.any { it.peerId == id }) { toast(R.string.toast_dup_peer); return@setPositiveButton }
+                devices.add(Device(id, null))
+                DeviceStore.save(this, devices)
+                deviceAdapter.notifyDataSetChanged()
+            }
+            .setNegativeButton(R.string.btn_cancel, null)
+            .show()
+    }
+
+    private fun showRenameDialog(dev: Device) {
+        val et = EditText(this).apply {
+            setText(dev.alias ?: "")
+            hint = getString(R.string.hint_alias)
+            inputType = InputType.TYPE_CLASS_TEXT
+        }
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(50, 40, 50, 10)
+            addView(et)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.dlg_rename_title)
+            .setView(layout)
+            .setPositiveButton(R.string.btn_add) { _, _ ->
+                val alias = et.text.toString().trim().ifEmpty { null }
+                val idx = devices.indexOf(dev)
+                if (idx >= 0) {
+                    devices[idx] = dev.copy(alias = alias)
+                    DeviceStore.save(this, devices)
+                    deviceAdapter.notifyDataSetChanged()
+                }
+            }
+            .setNegativeButton(R.string.btn_cancel, null)
+            .show()
+    }
+
+    private fun showDeleteConfirm(dev: Device) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.dlg_delete_title)
+            .setMessage(R.string.dlg_delete_msg)
+            .setPositiveButton(R.string.btn_delete) { _, _ ->
+                devices.remove(dev)
+                DeviceStore.save(this, devices)
+                deviceAdapter.notifyDataSetChanged()
+                if (currentDeviceId == dev.peerId) stopCurrent()
+            }
+            .setNegativeButton(R.string.btn_cancel, null)
+            .show()
+    }
+
+    // ═══════════════════════════════════════════════
     // 连接管理
     // ═══════════════════════════════════════════════
+
+    /** 点击设备 → 连接播放 */
+    private fun connectToDevice(dev: Device) {
+        val peer = dev.peerId
+        val config = viewerConfig
+        val relays = config?.relays ?: emptyList()
+        if (relays.isEmpty()) {
+            updateState("缺少 relay 配置")
+            return
+        }
+        currentDeviceId = peer
+        deviceAdapter.notifyDataSetChanged()
+        startConnection(
+            relays = relays,
+            deviceId = peer,
+            enableMdns = config?.enableMdns ?: false,
+            streamType = config?.streamType ?: "auto",
+            noAudio = config?.noAudio ?: false,
+            serialMap = config?.serialMap ?: emptyMap(),
+        )
+    }
+
+    /** 停止当前播放并释放句柄（用于删除当前设备） */
+    private fun stopCurrent() {
+        stopPolling()
+        decoder?.release()
+        decoder = null
+        audioPlayer?.release()
+        audioPlayer = null
+        if (viewerHandle != 0L) {
+            RustBridge.nativeDestroy(viewerHandle)
+            viewerHandle = 0
+        }
+        streamReady = false
+        decoderConfigured = false
+        currentDeviceId = null
+        txtPlaceholder.visibility = View.VISIBLE
+        btnReconnect.visibility = View.GONE
+        updateState(getString(R.string.state_idle))
+        deviceAdapter.notifyDataSetChanged()
+    }
 
     private fun startConnection(
         relays: List<String>,
@@ -152,8 +372,9 @@ class MainActivity : AppCompatActivity() {
         enableMdns: Boolean = false,
         streamType: String = "auto",
         noAudio: Boolean = false,
+        serialMap: Map<String, String> = emptyMap(),
     ) {
-        Log.i(TAG, "Starting connection: relays=$relays deviceId=$deviceId enableMdns=$enableMdns streamType=$streamType noAudio=$noAudio")
+        Log.i(TAG, "Starting connection: relays=$relays deviceId=$deviceId enableMdns=$enableMdns streamType=$streamType noAudio=$noAudio serialMap=$serialMap")
 
         // 销毁旧实例
         stopPolling()
@@ -179,6 +400,13 @@ class MainActivity : AppCompatActivity() {
             put("enable_mdns", enableMdns)
             put("stream_type", streamType)
             put("no_audio", noAudio)
+            // 本地 serial→PeerId 静态映射：命中时 Rust 侧无需连 Relay 即可解析 SN，
+            // 并能在 LAN 内 mDNS 直接匹配目标走直连（避免等待中继注册表解析）。
+            if (serialMap.isNotEmpty()) {
+                val serialMapObj = JSONObject()
+                for ((sn, pid) in serialMap) serialMapObj.put(sn, pid)
+                put("serial_map", serialMapObj)
+            }
         }
         val ok = RustBridge.nativeConnect(viewerHandle, config.toString())
         if (!ok) {
@@ -189,49 +417,194 @@ class MainActivity : AppCompatActivity() {
         streamReady = false
         decoderConfigured = false
         updateState("连接中...")
-        hideConnectPanel()
+        txtPlaceholder.visibility = View.GONE
         btnReconnect.visibility = View.GONE
 
         // 启动轮询
         startPolling()
     }
 
-    private fun reconnect() {
-        panelConnect.visibility = View.VISIBLE
-        btnReconnect.visibility = View.GONE
-        updateState("未连接")
-        txtStreamInfo.text = ""
+    // ═══════════════════════════════════════════════
+    // 设备配置（控制通道: 读取/下发编码/图像/系统参数）
+    // ═══════════════════════════════════════════════
+
+    /** 打开配置: 已连接则直接拉取; 未连接则先连接, StreamReady 后自动拉取 */
+    private fun openConfig(dev: Device) {
+        val peer = dev.peerId
+        val isCurrent = currentDeviceId == peer && streamReady
+        if (isCurrent) {
+            showConfigDialog(peer)
+        } else {
+            pendingConfigPeer = peer
+            connectToDevice(dev)
+        }
+    }
+
+    /** 显示设备配置弹窗, 走控制通道 Get/Set */
+    private fun showConfigDialog(peer: String) {
+        val view = LayoutInflater.from(this).inflate(R.layout.dialog_device_config, null)
+        val spinStream = view.findViewById<Spinner>(R.id.spin_stream)
+        val spinCodec = view.findViewById<Spinner>(R.id.spin_codec)
+        val spinRcMode = view.findViewById<Spinner>(R.id.spin_rc_mode)
+        val editWidth = view.findViewById<EditText>(R.id.edit_width)
+        val editHeight = view.findViewById<EditText>(R.id.edit_height)
+        val editFps = view.findViewById<EditText>(R.id.edit_fps)
+        val editBitrate = view.findViewById<EditText>(R.id.edit_bitrate)
+        val editGop = view.findViewById<EditText>(R.id.edit_gop)
+        val editBright = view.findViewById<EditText>(R.id.edit_brightness)
+        val editContrast = view.findViewById<EditText>(R.id.edit_contrast)
+        val editSat = view.findViewById<EditText>(R.id.edit_saturation)
+        val editSharp = view.findViewById<EditText>(R.id.edit_sharpness)
+        val editName = view.findViewById<EditText>(R.id.edit_name)
+        val camId = 0
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("${getString(R.string.dlg_config_title)}  ${shortId(peer)}")
+            .setView(view)
+            .setNegativeButton(R.string.btn_cancel, null)
+            .setPositiveButton(R.string.btn_apply, null)
+            .create()
+
+        // 当前拉取的编码配置（作为下发基底，保留未编辑字段）
+        var encoderBase: JSONObject? = null
+
+        fun fetchEncoder(stream: String) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                val resp = sendControl(
+                    JSONObject().apply { put("type", "GetEncoderConfig"); put("stream", stream) }.toString()
+                )
+                runOnUiThread {
+                    if (resp == null || !resp.optBoolean("ok", false)) {
+                        val err = resp?.optString("error") ?: "no response"
+                        toast(getString(R.string.config_fetch_fail, err))
+                        return@runOnUiThread
+                    }
+                    val ec = resp.optJSONObject("encoder_config") ?: return@runOnUiThread
+                    encoderBase = ec
+                    spinCodec.setSelection(if (ec.optString("output_data_type", "H.265") == "H.264") 1 else 0)
+                    spinRcMode.setSelection(if (ec.optString("rc_mode", "CBR") == "VBR") 1 else 0)
+                    val w = ec.optInt("width", 0); val h = ec.optInt("height", 0)
+                    editWidth.setText(if (w > 0) w.toString() else "")
+                    editHeight.setText(if (h > 0) h.toString() else "")
+                    editFps.setText(ec.optInt("dst_frame_rate_num", 25).toString())
+                    editBitrate.setText(ec.optInt("max_rate", 2000).toString())
+                    editGop.setText(ec.optInt("gop", 50).toString())
+                }
+            }
+        }
+
+        fun fetchImageAndSystem() {
+            lifecycleScope.launch(Dispatchers.IO) {
+                val img = sendControl(
+                    JSONObject().apply { put("type", "GetImageConfig"); put("cam_id", camId) }.toString()
+                )
+                val sys = sendControl(JSONObject().apply { put("type", "GetSystemConfig") }.toString())
+                runOnUiThread {
+                    img?.optJSONObject("image_config")?.let { ic ->
+                        ic.optJSONObject("adjustment")?.let { a ->
+                            editBright.setText(a.optInt("brightness", 0).toString())
+                            editContrast.setText(a.optInt("contrast", 0).toString())
+                            editSat.setText(a.optInt("saturation", 0).toString())
+                            editSharp.setText(a.optInt("sharpness", 0).toString())
+                        }
+                    }
+                    sys?.optJSONObject("system_config")?.optString("device_name")?.let { editName.setText(it) }
+                }
+            }
+        }
+
+        fun applyConfig() {
+            if (viewerHandle == 0L) { toast(R.string.config_not_connected); return }
+            lifecycleScope.launch(Dispatchers.IO) {
+                var okAll = true
+                // 1) 编码参数
+                val ec = encoderBase
+                if (ec != null) {
+                    val cfg = JSONObject(ec.toString())
+                    cfg.put("output_data_type", if (spinCodec.selectedItemPosition == 1) "H.264" else "H.265")
+                    cfg.put("rc_mode", if (spinRcMode.selectedItemPosition == 1) "VBR" else "CBR")
+                    cfg.put("width", editWidth.text.toString().toIntOrNull() ?: ec.optInt("width", 1280))
+                    cfg.put("height", editHeight.text.toString().toIntOrNull() ?: ec.optInt("height", 720))
+                    cfg.put("dst_frame_rate_num", editFps.text.toString().toIntOrNull() ?: cfg.optInt("dst_frame_rate_num", 25))
+                    cfg.put("dst_frame_rate_den", 1)
+                    cfg.put("max_rate", editBitrate.text.toString().toIntOrNull() ?: cfg.optInt("max_rate", 2000))
+                    cfg.put("gop", editGop.text.toString().toIntOrNull() ?: cfg.optInt("gop", 50))
+                    val req = JSONObject().apply { put("type", "SetEncoderConfig"); put("stream", configStream); put("config", cfg) }
+                    val resp = sendControl(req.toString())
+                    if (resp == null || !resp.optBoolean("ok", false)) okAll = false
+                } else {
+                    okAll = false
+                }
+                // 2) 图像参数
+                val bright = editBright.text.toString().toIntOrNull()
+                val contrast = editContrast.text.toString().toIntOrNull()
+                val sat = editSat.text.toString().toIntOrNull()
+                val sharp = editSharp.text.toString().toIntOrNull()
+                val imgReq = JSONObject().apply {
+                    put("type", "SetImageConfig"); put("cam_id", camId)
+                    put("adjustment", JSONObject().apply {
+                        if (bright != null) put("brightness", bright)
+                        if (contrast != null) put("contrast", contrast)
+                        if (sat != null) put("saturation", sat)
+                        if (sharp != null) put("sharpness", sharp)
+                    })
+                }
+                val imgResp = sendControl(imgReq.toString())
+                if (imgResp == null || !imgResp.optBoolean("ok", false)) okAll = false
+                // 3) 系统参数（设备名）
+                val name = editName.text.toString().trim()
+                if (name.isNotEmpty()) {
+                    val sysReq = JSONObject().apply { put("type", "SetSystemConfig"); put("device_name", name) }
+                    val sysResp = sendControl(sysReq.toString())
+                    if (sysResp == null || !sysResp.optBoolean("ok", false)) okAll = false
+                }
+                runOnUiThread {
+                    if (okAll) toast(R.string.config_apply_ok)
+                    else toast(getString(R.string.config_apply_fail, "部分失败"))
+                    dialog.dismiss()
+                }
+            }
+        }
+
+        spinStream.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: AdapterView<*>, v: View?, pos: Int, id: Long) {
+                configStream = when (pos) { 0 -> "main"; 1 -> "sub"; else -> "third" }
+                fetchEncoder(configStream)
+            }
+            override fun onNothingSelected(p: AdapterView<*>) {}
+        }
+
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { applyConfig() }
+        }
+
+        dialog.show()
+        fetchEncoder(configStream)
+        fetchImageAndSystem()
+    }
+
+    /** 发送控制命令（后台线程调用） */
+    private fun sendControl(reqJson: String): JSONObject? {
+        if (viewerHandle == 0L) return null
+        return try {
+            val resp = RustBridge.nativeSendControlCommand(viewerHandle, reqJson)
+            if (resp.isNullOrEmpty()) null else JSONObject(resp)
+        } catch (e: Exception) {
+            Log.e(TAG, "sendControl failed: $reqJson", e)
+            null
+        }
     }
 
     // ═══════════════════════════════════════════════
-    // viewer.toml 配置加载
+    // viewer.toml 配置加载（仅 relays / 默认设备种子）
     // ═══════════════════════════════════════════════
 
-    /**
-     * 从 assets/viewer.toml 加载配置
-     *
-     * TOML 格式:
-     *   relays = ["/ip4/.../udp/.../quic-v1/p2p/12D3...", ...]
-     *   camera = "12D3KooW..."
-     *   no_audio = false
-     *   enable_mdns = false
-     *   stream_type = "auto"
-     */
     private fun loadViewerConfig() {
         try {
             val toml = assets.open(VIEWER_TOML).bufferedReader().use { it.readText() }
             val config = parseViewerToml(toml)
             viewerConfig = config
-            Log.i(TAG, "Loaded $VIEWER_TOML: relays=${config.relays.size} camera=${config.camera} " +
-                    "noAudio=${config.noAudio} enableMdns=${config.enableMdns} streamType=${config.streamType}")
-
-            // 用配置值预填充 UI 输入框
-            if (config.relays.isNotEmpty()) {
-                inputRelay.setText(config.relays.joinToString(", "))
-            }
-            if (config.camera.isNotEmpty()) {
-                inputDeviceId.setText(config.camera)
-            }
+            Log.i(TAG, "Loaded $VIEWER_TOML: relays=${config.relays.size} cameras=${config.cameras.size}")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to load $VIEWER_TOML from assets: ${e.message}")
             viewerConfig = null
@@ -239,50 +612,53 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * 简易 TOML 解析器（仅支持 viewer.toml 所需的格式）
-     *
-     * 支持的格式:
-     *   key = "value"           -> 字符串
-     *   key = true/false        -> 布尔
-     *   key = ["a", "b", ...]   -> 字符串数组（可跨行）
+     * 简易 TOML 解析器（仅支持 viewer.toml 所需格式）
+     * 支持顶层字段与 [serial_map] 子表（SN = "PeerId" 形式）。
      */
     private fun parseViewerToml(toml: String): ViewerTomlConfig {
         var relays = listOf<String>()
+        var cameraSerials = listOf<String>()
         var camera = ""
         var noAudio = false
         var enableMdns = false
         var streamType = "auto"
+        val serialMap = mutableMapOf<String, String>()
 
-        // 将多行数组合并成单行（TOML 数组可跨行书写）
-        val normalized = toml.replace(Regex("\\r\\n?"), "\n")
-            .replace(Regex("\\n\\s*"), " ")
+        val lines = toml.replace(Regex("\\r\\n?"), "\n").lines()
+        var inSerialMap = false
+        val topLevel = StringBuilder()
+        for (rawLine in lines) {
+            val line = rawLine.trim()
+            if (line.startsWith("#")) continue
+            if (line.startsWith("[")) {
+                // 进入/离开 [serial_map] 子表
+                inSerialMap = line.equals("[serial_map]", ignoreCase = true)
+                if (!inSerialMap) topLevel.append(line).append(" ")
+                continue
+            }
+            if (inSerialMap) {
+                // 解析 `key = "value"` 或 `key = value`
+                val m = Regex("""(\S+)\s*=\s*"?([^"\n]+?)"?\s*$""").find(line)
+                if (m != null) {
+                    val k = m.groupValues[1].trim()
+                    val v = m.groupValues[2].trim().trim('"')
+                    if (k.isNotEmpty() && v.isNotEmpty()) serialMap[k] = v
+                }
+            } else if (line.isNotEmpty()) {
+                topLevel.append(line).append(" ")
+            }
+        }
 
-        // 按顶层 key = value 解析
         val pattern = Regex("""(\w+)\s*=\s*(.+?)(?=\s+\w+\s*=|$)""")
-        for (match in pattern.findAll(normalized)) {
+        for (match in pattern.findAll(topLevel.toString())) {
             val key = match.groupValues[1]
             val value = match.groupValues[2].trim()
-
             when (key) {
-                "relays" -> {
-                    // 解析 ["addr1", "addr2", ...]
-                    val arrayMatch = Regex("""\[(.*)]""").find(value)
-                    if (arrayMatch != null) {
-                        relays = arrayMatch.groupValues[1]
-                            .split(",")
-                            .map { it.trim().trim('"').trim() }
-                            .filter { it.isNotEmpty() }
-                    }
-                }
-                "camera" -> {
-                    camera = value.trim('"')
-                }
-                "no_audio" -> {
-                    noAudio = value.toBooleanStrictOrNull() ?: false
-                }
-                "enable_mdns" -> {
-                    enableMdns = value.toBooleanStrictOrNull() ?: false
-                }
+                "relays" -> relays = parseStringArray(value)
+                "camera_serials", "cameras" -> cameraSerials = parseStringArray(value)
+                "camera" -> camera = value.trim('"')
+                "no_audio" -> noAudio = value.toBooleanStrictOrNull() ?: false
+                "enable_mdns" -> enableMdns = value.toBooleanStrictOrNull() ?: false
                 "stream_type", "stream" -> {
                     val s = value.trim('"')
                     if (s.isNotEmpty()) streamType = s
@@ -290,13 +666,26 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        val cameras = LinkedHashSet<String>()
+        cameras.addAll(cameraSerials)
+        if (camera.isNotEmpty()) cameras.add(camera)
+
         return ViewerTomlConfig(
             relays = relays,
-            camera = camera,
+            cameras = cameras.toList(),
             noAudio = noAudio,
             enableMdns = enableMdns,
             streamType = streamType,
+            serialMap = serialMap,
         )
+    }
+
+    private fun parseStringArray(value: String): List<String> {
+        val arrayMatch = Regex("""\[(.*)]""").find(value) ?: return emptyList()
+        return arrayMatch.groupValues[1]
+            .split(",")
+            .map { it.trim().trim('"').trim() }
+            .filter { it.isNotEmpty() }
     }
 
     // ═══════════════════════════════════════════════
@@ -310,16 +699,12 @@ class MainActivity : AppCompatActivity() {
             var eventSequence = 0
 
             while (isActive && viewerHandle != 0L) {
-                // ── 事件 ──
                 val eventJson = RustBridge.nativePollEvent(viewerHandle)
                 if (eventJson != null) {
                     eventSequence++
                     handleEvent(eventJson, eventSequence)
                 }
 
-                // ── 视频帧 ──
-                // Rust 视频帧格式: [PTS 8B] + [flags 1B] + [H.265 NAL data]
-                // 关键帧用 Rust 转发的 flags bit 2 (0x04) 判定，权威且无需重复字节扫描
                 if (streamReady && decoderConfigured) {
                     val raw = RustBridge.nativePollVideoFrame(viewerHandle)
                     if (raw != null && raw.size > 9) {
@@ -331,7 +716,6 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
-                // ── 音频帧 ──
                 if (streamReady && audioPlayer != null) {
                     val raw = RustBridge.nativePollAudioFrame(viewerHandle)
                     if (raw != null && raw.size > 8) {
@@ -363,31 +747,34 @@ class MainActivity : AppCompatActivity() {
 
             runOnUiThread {
                 when (type) {
-                    "Connecting" -> {
-                        updateState("连接中...")
-                    }
+                    "Connecting" -> updateState("连接中...")
                     "Connected" -> {
                         val connType = event.optString("connection_type", "relay")
-                        Log.i(TAG, "Connection type: $connType")
                         updateState(if (connType == "relay") "已连接 (Relay)" else "直连 ($connType)")
                     }
                     "DirectUpgraded" -> {
                         val connType = event.optString("connection_type", "DCUtR")
-                        Log.i(TAG, "Direct upgraded: $connType (stream sub → main)")
                         updateState("直连 ($connType)")
                     }
                     "StreamReady" -> {
                         streamReady = true
                         updateState("码流就绪")
+                        txtPlaceholder.visibility = View.GONE
+                        deviceAdapter.notifyDataSetChanged()
                         tryConfigureDecoder()
-                        // 启动音频播放
                         audioPlayer = PcmAudioPlayer().also { it.play() }
+                        // 若在等待配置, 连接就绪后自动弹出配置弹窗
+                        pendingConfigPeer?.let { peer ->
+                            pendingConfigPeer = null
+                            showConfigDialog(peer)
+                        }
                     }
                     "Disconnected" -> {
                         streamReady = false
                         decoderConfigured = false
                         updateState("已断开")
                         btnReconnect.visibility = View.VISIBLE
+                        deviceAdapter.notifyDataSetChanged()
                     }
                     "Error" -> {
                         val msg = event.optString("message", "未知错误")
@@ -430,7 +817,55 @@ class MainActivity : AppCompatActivity() {
         txtState.text = state
     }
 
-    private fun hideConnectPanel() {
-        panelConnect.visibility = View.GONE
+    private fun toast(resId: Int) {
+        Toast.makeText(this, resId, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun toast(msg: String) {
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+    }
+
+    /** 缩短 PeerId 显示：前 12 位…后 8 位 */
+    private fun shortId(id: String): String =
+        if (id.length > 24) "${id.take(12)}…${id.takeLast(8)}" else id
+
+    // ═══════════════════════════════════════════════
+    // 设备列表适配器
+    // ═══════════════════════════════════════════════
+
+    private inner class DeviceAdapter : BaseAdapter() {
+        override fun getCount(): Int = devices.size
+        override fun getItem(position: Int): Any = devices[position]
+        override fun getItemId(position: Int): Long = position.toLong()
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
+            val view = convertView ?: LayoutInflater.from(this@MainActivity)
+                .inflate(R.layout.item_device, parent, false)
+
+            val dev = devices[position]
+            val name = view.findViewById<TextView>(R.id.txt_device_name)
+            val status = view.findViewById<TextView>(R.id.txt_device_status)
+
+            name.text = dev.alias ?: shortId(dev.peerId)
+
+            val isCurrent = dev.peerId == currentDeviceId
+            when {
+                isCurrent && streamReady -> {
+                    status.visibility = View.VISIBLE
+                    status.text = getString(R.string.device_status_connected)
+                    view.setBackgroundColor(Color.parseColor("#33FFFFFF"))
+                }
+                isCurrent -> {
+                    status.visibility = View.VISIBLE
+                    status.text = getString(R.string.state_connecting)
+                    view.setBackgroundColor(Color.parseColor("#22FFFFFF"))
+                }
+                else -> {
+                    status.visibility = View.GONE
+                    view.setBackgroundColor(Color.TRANSPARENT)
+                }
+            }
+            return view
+        }
     }
 }

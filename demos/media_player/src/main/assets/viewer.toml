@@ -1,6 +1,19 @@
 relays = ["/ip4/101.35.90.171/udp/4001/quic-v1/p2p/12D3KooWDGUejVsts1G4tGyf8ukkr73eWxCr1EUfCQxgcbSDUie1", 
 "/ip4/134.175.248.113/udp/4001/quic-v1/p2p/12D3KooWMZNFG6htyb5gBrChtgag81YE5ySmXLoFiYhaUnQaTopr"]
+# 设备列表：可填多个完整 PeerId 或序列号 SN，app 左侧设备栏点击即连接播放
+# 用 SN 连接的设备需配合下方 [serial_map] 才能本地解析并走 LAN 直连
+camera_serials = [
+    "12D3KooWG2ihY7Ne75KqkYyYrQWL1ACLUgUN8rp1nTskQB3RNNNt",
+    "e33700a6620dfddc",
+]
+# 兼容旧字段（单设备）：未设置 camera_serials 时使用 camera
 camera = "12D3KooWG2ihY7Ne75KqkYyYrQWL1ACLUgUN8rp1nTskQB3RNNNt"
 no_audio = false
 enable_mdns = true
 stream_type = "auto"
+
+# 本地 serial→PeerId 静态映射：命中时 Rust 侧无需连接 Relay 即可解析 SN，
+# 并能在 LAN 内经 mDNS 直接匹配目标走直连（避免等待中继注册表解析、延迟降到瞬时）。
+# 用 SN 连接的设备务必在此登记；无映射时仍走旧的中继注册表路径（功能正常，无优化）。
+[serial_map]
+e33700a6620dfddc = "12D3KooWG2ihY7Ne75KqkYyYrQWL1ACLUgUN8rp1nTskQB3RNNNt"
