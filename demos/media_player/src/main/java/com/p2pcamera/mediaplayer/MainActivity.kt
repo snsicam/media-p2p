@@ -630,38 +630,70 @@ class MainActivity : AppCompatActivity() {
      */
     private fun parseViewerToml(toml: String): ViewerTomlConfig {
         var relays = listOf<String>()
+        val relayList = mutableListOf<String>() // 来自 [[relay_list]] 结构化格式
         var cameraSerials = listOf<String>()
-        var camera = ""
         var noAudio = false
         var enableMdns = false
         var streamType = "auto"
         val serialMap = mutableMapOf<String, String>()
 
         val lines = toml.replace(Regex("\\r\\n?"), "\n").lines()
-        var inSerialMap = false
+
+        // [[relay_list]] 表内累积字段（与 Rust RelayConfig::to_multiaddr 对齐）
+        var rlIp = ""
+        var rlPort = 4001
+        var rlTransport = "quic"
+        var rlPeer = ""
+        fun flushRelay() {
+            if (rlIp.isNotEmpty() && rlPeer.isNotEmpty()) {
+                buildRelayMultiaddr(rlIp, rlPort, rlTransport, rlPeer)?.let { relayList.add(it) }
+            }
+            rlIp = ""; rlPort = 4001; rlTransport = "quic"; rlPeer = ""
+        }
+
+        var inTable: String? = null // null=顶层, "relay_list", "serial_map"
         val topLevel = StringBuilder()
         for (rawLine in lines) {
             val line = rawLine.trim()
-            if (line.startsWith("#")) continue
+            if (line.isEmpty() || line.startsWith("#")) continue
             if (line.startsWith("[")) {
-                // 进入/离开 [serial_map] 子表
-                inSerialMap = line.equals("[serial_map]", ignoreCase = true)
-                if (!inSerialMap) topLevel.append(line).append(" ")
+                // 离开上一个表
+                if (inTable == "relay_list") flushRelay()
+                inTable = when {
+                    line.startsWith("[[") && line.equals("[[relay_list]]", ignoreCase = true) -> "relay_list"
+                    line.equals("[serial_map]", ignoreCase = true) -> "serial_map"
+                    else -> null
+                }
+                if (inTable == null) topLevel.append(line).append(" ")
                 continue
             }
-            if (inSerialMap) {
-                // 解析 `key = "value"` 或 `key = value`
-                val m = Regex("""(\S+)\s*=\s*"?([^"\n]+?)"?\s*$""").find(line)
-                if (m != null) {
-                    val k = m.groupValues[1].trim()
-                    val v = m.groupValues[2].trim().trim('"')
-                    if (k.isNotEmpty() && v.isNotEmpty()) serialMap[k] = v
+            when (inTable) {
+                "relay_list" -> {
+                    val m = Regex("""(\w+)\s*=\s*"?([^"\n#]+?)"?\s*$""").find(line)
+                    if (m != null) {
+                        when (m.groupValues[1].trim().lowercase()) {
+                            "ip" -> rlIp = m.groupValues[2].trim().trim('"')
+                            "port" -> rlPort = m.groupValues[2].trim().toIntOrNull() ?: 4001
+                            "transport" -> rlTransport = m.groupValues[2].trim().trim('"')
+                            "peer_id" -> rlPeer = m.groupValues[2].trim().trim('"')
+                        }
+                    }
                 }
-            } else if (line.isNotEmpty()) {
-                topLevel.append(line).append(" ")
+                "serial_map" -> {
+                    val m = Regex("""(\S+)\s*=\s*"?([^"\n]+?)"?\s*$""").find(line)
+                    if (m != null) {
+                        val k = m.groupValues[1].trim()
+                        val v = m.groupValues[2].trim().trim('"')
+                        if (k.isNotEmpty() && v.isNotEmpty()) serialMap[k] = v
+                    }
+                }
+                else -> topLevel.append(line).append(" ")
             }
         }
+        // 文件末尾 flush 最后一个 relay_list
+        if (inTable == "relay_list") flushRelay()
 
+        // 顶层字段解析（兼容旧 relays / camera_serials 等）
         val pattern = Regex("""(\w+)\s*=\s*(.+?)(?=\s+\w+\s*=|$)""")
         for (match in pattern.findAll(topLevel.toString())) {
             val key = match.groupValues[1]
@@ -669,7 +701,6 @@ class MainActivity : AppCompatActivity() {
             when (key) {
                 "relays" -> relays = parseStringArray(value)
                 "camera_serials", "cameras" -> cameraSerials = parseStringArray(value)
-                "camera" -> camera = value.trim('"')
                 "no_audio" -> noAudio = value.toBooleanStrictOrNull() ?: false
                 "enable_mdns" -> enableMdns = value.toBooleanStrictOrNull() ?: false
                 "stream_type", "stream" -> {
@@ -679,18 +710,31 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // 优先用结构化 [[relay_list]]，无则退回旧 relays 字符串数组
+        val finalRelays = if (relayList.isNotEmpty()) relayList.toList() else relays
         val cameras = LinkedHashSet<String>()
         cameras.addAll(cameraSerials)
-        if (camera.isNotEmpty()) cameras.add(camera)
 
         return ViewerTomlConfig(
-            relays = relays,
+            relays = finalRelays,
             cameras = cameras.toList(),
             noAudio = noAudio,
             enableMdns = enableMdns,
             streamType = streamType,
             serialMap = serialMap,
         )
+    }
+
+    /** 将结构化 relay 字段组装成 libp2p multiaddr（与 Rust RelayConfig::to_multiaddr 一致） */
+    private fun buildRelayMultiaddr(ip: String, port: Int, transport: String, peerId: String): String? {
+        val t = ip.trim().trim { it == '[' || it == ']' }
+        if (t.isEmpty() || peerId.trim().isEmpty()) return null
+        val family = if (t.contains(':')) "ip6" else "ip4"
+        return when (transport.lowercase()) {
+            "tcp" -> "/$family/$t/tcp/$port/p2p/$peerId"
+            "quic" -> "/$family/$t/udp/$port/quic-v1/p2p/$peerId"
+            else -> null
+        }
     }
 
     private fun parseStringArray(value: String): List<String> {
