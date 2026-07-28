@@ -14,15 +14,15 @@
     <string name="state_disconnected">已断开</string>
     <string name="state_error">错误</string>
     <string name="title_devices">设备管理</string>
-    <string name="hint_tap_device">点击设备开始播放</string>
-    <string name="hint_select_device">请从左侧选择设备</string>
+    <string name="hint_tap_device">点击选中设备，长按可连接 / 断开 / 配置</string>
+    <string name="hint_select_device">长按设备并选择「连接」开始播放</string>
     <string name="device_status_connected">播放中</string>
     <string name="no_devices">未配置设备</string>
 
-    <!-- 设备右键(长按)菜单 -->
-    <string name="menu_play">播放</string>
+    <!-- 设备长按菜单 -->
+    <string name="menu_connect">连接</string>
+    <string name="menu_disconnect">断开</string>
     <string name="menu_config">配置</string>
-    <string name="menu_delete">删除</string>
 
     <!-- 添加设备对话框 -->
     <string name="dlg_add_title">添加设备</string>
@@ -32,10 +32,14 @@
     <string name="toast_empty_peer">序列号不能为空</string>
     <string name="toast_dup_peer">该设备已存在</string>
     <string name="toast_no_device">没有可删除的设备</string>
+    <string name="toast_no_select">请先选中设备</string>
+    <string name="toast_deleted">已删除 %1$s</string>
+    <string name="toast_disconnected">已断开 %1$s</string>
+    <string name="toast_not_connected">该设备未连接</string>
 
     <!-- 删除确认 -->
     <string name="dlg_delete_title">删除设备</string>
-    <string name="dlg_delete_msg">确定删除该设备？</string>
+    <string name="dlg_delete_msg">确定删除设备 %1$s？</string>
     <string name="btn_delete">删除</string>
 
     <!-- 设备配置对话框 -->

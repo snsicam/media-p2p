@@ -9,7 +9,7 @@
     <!-- 左侧设备管理面板 -->
     <LinearLayout
         android:id="@+id/panel_devices"
-        android:layout_width="260dp"
+        android:layout_width="130dp"
         android:layout_height="0dp"
         android:orientation="vertical"
         android:background="@color/bg_panel"
@@ -58,7 +58,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginEnd="4dp"
-                android:text="@string/dlg_add_title"
+                android:text="@string/btn_add"
                 android:textSize="13sp" />
 
             <Button
@@ -67,7 +67,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginStart="4dp"
-                android:text="@string/dlg_delete_title"
+                android:text="@string/btn_delete"
                 android:textSize="13sp" />
         </LinearLayout>
     </LinearLayout>

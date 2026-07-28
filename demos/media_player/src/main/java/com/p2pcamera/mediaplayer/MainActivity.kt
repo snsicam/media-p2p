@@ -30,8 +30,9 @@ import java.io.File
  * 布局: 左侧设备管理面板（设备列表），右侧视频画面。
  *
  * 设备管理（SN 模式，运行时持久化到 App 内部存储 devices.json）:
- *   - 点击设备 → 连接播放
- *   - 长按设备 → 菜单: 播放 / 重命名 / 配置 / 删除
+ *   - 点击设备 → 选中(高亮), 不自动连接
+ *   - 长按设备 → 菜单: 连接 / 断开 / 配置
+ *   - 面板「删除」按钮 → 删除当前选中的设备(确认后真正删除)
  *   - 面板底部「添加设备」按钮 → 仅需输入设备 ID（SN）
  *   - 设备 ID 直接透传给 Rust 连接层；Rust 侧 viewer.rs 会自动判定其为
  *     完整 PeerId 还是短序列号(SN)，SN 经 relay 注册表解析出真实 PeerId 再连接。
@@ -82,6 +83,9 @@ class MainActivity : AppCompatActivity() {
     // 当前正在连接/播放的设备 PeerId（null 表示未连接）
     private var currentDeviceId: String? = null
 
+    // 设备列表中"选中"的设备 PeerId: 点击只选中(高亮), 不自动连接; 长按菜单/删除作用于它
+    private var selectedDeviceId: String? = null
+
     // 配置弹窗: 等待连接建立后再拉取参数
     private var pendingConfigPeer: String? = null
     // 配置弹窗当前编辑的码流
@@ -116,20 +120,22 @@ class MainActivity : AppCompatActivity() {
         // 设备列表适配器
         deviceAdapter = DeviceAdapter()
         listDevices.adapter = deviceAdapter
+        // 点击 → 仅选中(高亮), 不自动连接, 与播放解耦
         listDevices.setOnItemClickListener { _, _, position, _ ->
             val dev = devices.getOrNull(position) ?: return@setOnItemClickListener
-            onDeviceActivate(dev)
+            selectedDeviceId = dev.peerId
+            deviceAdapter.notifyDataSetChanged()
         }
-        // 长按 → 直接打开设备配置（不再显示设备 ID，仅保留配置）
+        // 长按 → 弹出菜单: 连接 / 配置
         listDevices.setOnItemLongClickListener { _, _, position, _ ->
             val dev = devices.getOrNull(position) ?: return@setOnItemLongClickListener true
-            openConfig(dev)
+            showDeviceActionMenu(dev)
             true
         }
 
         btnAddDevice.setOnClickListener { showAddDeviceDialog() }
-        // 删除设备: 与"添加设备"并排的按钮, 弹出设备列表选择要删除的项
-        findViewById<Button>(R.id.btn_delete_device).setOnClickListener { showDeleteDevicePicker() }
+        // 删除设备: 针对列表"选中"的设备, 先确认再删除
+        findViewById<Button>(R.id.btn_delete_device).setOnClickListener { onDeleteSelected() }
 
         // 加载 viewer.toml（出厂默认 + relays）
         loadViewerConfig()
@@ -228,6 +234,7 @@ class MainActivity : AppCompatActivity() {
         }
         devices.clear()
         devices.addAll(loaded)
+        selectedDeviceId = devices.firstOrNull()?.peerId
         deviceAdapter.notifyDataSetChanged()
     }
 
@@ -260,35 +267,64 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    /** 面板"删除"按钮: 删除列表"选中"的设备, 未选中则提示 */
+    private fun onDeleteSelected() {
+        val peer = selectedDeviceId
+        if (peer == null) {
+            toast(R.string.toast_no_select)
+            return
+        }
+        val dev = devices.firstOrNull { it.peerId == peer } ?: run {
+            toast(R.string.toast_no_select)
+            return
+        }
+        showDeleteConfirm(dev)
+    }
+
+    /** 删除确认框: 确认后删除指定设备 */
     private fun showDeleteConfirm(dev: Device) {
         AlertDialog.Builder(this)
             .setTitle(R.string.dlg_delete_title)
-            .setMessage(R.string.dlg_delete_msg)
+            .setMessage(getString(R.string.dlg_delete_msg, shortId(dev.peerId)))
             .setPositiveButton(R.string.btn_delete) { _, _ ->
+                if (currentDeviceId == dev.peerId) stopCurrent()
+                if (selectedDeviceId == dev.peerId) selectedDeviceId = null
                 devices.remove(dev)
                 DeviceStore.save(this, devices)
                 deviceAdapter.notifyDataSetChanged()
-                if (currentDeviceId == dev.peerId) stopCurrent()
+                toast(getString(R.string.toast_deleted, shortId(dev.peerId)))
             }
             .setNegativeButton(R.string.btn_cancel, null)
             .show()
     }
 
-    /** 面板"删除设备"按钮: 弹出设备列表, 选择一项后走删除确认 */
-    private fun showDeleteDevicePicker() {
-        if (devices.isEmpty()) {
-            toast(R.string.toast_no_device)
-            return
-        }
-        val names = devices.map { shortId(it.peerId) }.toTypedArray()
+    /** 长按菜单: 连接 / 断开 / 配置（不显示设备 ID） */
+    private fun showDeviceActionMenu(dev: Device) {
+        val items = arrayOf(
+            getString(R.string.menu_connect),
+            getString(R.string.menu_disconnect),
+            getString(R.string.menu_config),
+        )
         AlertDialog.Builder(this)
-            .setTitle(R.string.dlg_delete_title)
-            .setItems(names) { _, which ->
-                val dev = devices.getOrNull(which) ?: return@setItems
-                showDeleteConfirm(dev)
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> onDeviceActivate(dev)   // 连接
+                    1 -> disconnectDevice(dev)   // 断开
+                    2 -> openConfig(dev)          // 配置
+                }
             }
             .setNegativeButton(R.string.btn_cancel, null)
             .show()
+    }
+
+    /** 长按菜单"断开": 仅当该设备为当前播放设备时断开连接 */
+    private fun disconnectDevice(dev: Device) {
+        if (dev.peerId == currentDeviceId) {
+            stopCurrent()
+            toast(getString(R.string.toast_disconnected, shortId(dev.peerId)))
+        } else {
+            toast(R.string.toast_not_connected)
+        }
     }
 
     // ═══════════════════════════════════════════════
@@ -913,6 +949,7 @@ class MainActivity : AppCompatActivity() {
             name.text = shortId(dev.peerId)
 
             val isCurrent = dev.peerId == currentDeviceId
+            val isSelected = dev.peerId == selectedDeviceId
             when {
                 isCurrent && streamReady -> {
                     status.visibility = View.VISIBLE
@@ -923,6 +960,10 @@ class MainActivity : AppCompatActivity() {
                     status.visibility = View.VISIBLE
                     status.text = getString(R.string.state_connecting)
                     view.setBackgroundColor(Color.parseColor("#22FFFFFF"))
+                }
+                isSelected -> {
+                    status.visibility = View.GONE
+                    view.setBackgroundColor(Color.parseColor("#264F78"))
                 }
                 else -> {
                     status.visibility = View.GONE
