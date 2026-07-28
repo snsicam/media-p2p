@@ -447,8 +447,7 @@ class MainActivity : AppCompatActivity() {
         val spinStream = view.findViewById<Spinner>(R.id.spin_stream)
         val spinCodec = view.findViewById<Spinner>(R.id.spin_codec)
         val spinRcMode = view.findViewById<Spinner>(R.id.spin_rc_mode)
-        val editWidth = view.findViewById<EditText>(R.id.edit_width)
-        val editHeight = view.findViewById<EditText>(R.id.edit_height)
+        val spinResolution = view.findViewById<Spinner>(R.id.spin_resolution)
         val editFps = view.findViewById<EditText>(R.id.edit_fps)
         val editBitrate = view.findViewById<EditText>(R.id.edit_bitrate)
         val editGop = view.findViewById<EditText>(R.id.edit_gop)
@@ -485,7 +484,6 @@ class MainActivity : AppCompatActivity() {
         selectConfigTab(0)
 
         val dialog = AlertDialog.Builder(this)
-            .setTitle("${getString(R.string.dlg_config_title)}  ${shortId(peer)}")
             .setView(view)
             .setNegativeButton(R.string.btn_cancel, null)
             .setPositiveButton(R.string.btn_apply, null)
@@ -510,8 +508,15 @@ class MainActivity : AppCompatActivity() {
                     spinCodec.setSelection(if (ec.optString("output_data_type", "H.265") == "H.264") 1 else 0)
                     spinRcMode.setSelection(if (ec.optString("rc_mode", "CBR") == "VBR") 1 else 0)
                     val w = ec.optInt("width", 0); val h = ec.optInt("height", 0)
-                    editWidth.setText(if (w > 0) w.toString() else "")
-                    editHeight.setText(if (h > 0) h.toString() else "")
+                    spinResolution.setSelection(
+                        when {
+                            w == 1920 && h == 1080 -> 0
+                            w == 1280 && h == 720 -> 1
+                            w == 960 && h == 540 -> 2
+                            w == 640 && h == 360 -> 3
+                            else -> 1
+                        }
+                    )
                     editFps.setText(ec.optInt("dst_frame_rate_num", 25).toString())
                     editBitrate.setText(ec.optInt("max_rate", 2000).toString())
                     editGop.setText(ec.optInt("gop", 50).toString())
@@ -549,8 +554,15 @@ class MainActivity : AppCompatActivity() {
                     val cfg = JSONObject(ec.toString())
                     cfg.put("output_data_type", if (spinCodec.selectedItemPosition == 1) "H.264" else "H.265")
                     cfg.put("rc_mode", if (spinRcMode.selectedItemPosition == 1) "VBR" else "CBR")
-                    cfg.put("width", editWidth.text.toString().toIntOrNull() ?: ec.optInt("width", 1280))
-                    cfg.put("height", editHeight.text.toString().toIntOrNull() ?: ec.optInt("height", 720))
+                    val (rw, rh) = when (spinResolution.selectedItemPosition) {
+                        0 -> 1920 to 1080
+                        1 -> 1280 to 720
+                        2 -> 960 to 540
+                        3 -> 640 to 360
+                        else -> 1280 to 720
+                    }
+                    cfg.put("width", rw)
+                    cfg.put("height", rh)
                     cfg.put("dst_frame_rate_num", editFps.text.toString().toIntOrNull() ?: cfg.optInt("dst_frame_rate_num", 25))
                     cfg.put("dst_frame_rate_den", 1)
                     cfg.put("max_rate", editBitrate.text.toString().toIntOrNull() ?: cfg.optInt("max_rate", 2000))
@@ -569,10 +581,10 @@ class MainActivity : AppCompatActivity() {
                 val imgReq = JSONObject().apply {
                     put("type", "SetImageConfig"); put("cam_id", camId)
                     put("adjustment", JSONObject().apply {
-                        if (bright != null) put("brightness", bright)
-                        if (contrast != null) put("contrast", contrast)
-                        if (sat != null) put("saturation", sat)
-                        if (sharp != null) put("sharpness", sharp)
+                        if (bright != null) put("brightness", bright.coerceIn(0, 100))
+                        if (contrast != null) put("contrast", contrast.coerceIn(0, 100))
+                        if (sat != null) put("saturation", sat.coerceIn(0, 100))
+                        if (sharp != null) put("sharpness", sharp.coerceIn(0, 100))
                     })
                 }
                 val imgResp = sendControl(imgReq.toString())

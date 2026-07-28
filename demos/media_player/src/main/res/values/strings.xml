@@ -47,9 +47,9 @@
     <string name="cfg_fps">帧率 (FPS)</string>
     <string name="cfg_bitrate">码率 (kbps)</string>
     <string name="cfg_gop">GOP</string>
-    <string name="cfg_brightness">亮度 (-100~100)</string>
-    <string name="cfg_contrast">对比度 (-100~100)</string>
-    <string name="cfg_saturation">饱和度 (-100~100)</string>
+    <string name="cfg_brightness">亮度 (0~100)</string>
+    <string name="cfg_contrast">对比度 (0~100)</string>
+    <string name="cfg_saturation">饱和度 (0~100)</string>
     <string name="cfg_exposure">曝光模式</string>
     <string name="cfg_name">设备名</string>
     <string name="config_fetching">读取设备参数中...</string>
@@ -77,10 +77,16 @@
         <item>VBR (动态码率)</item>
     </string-array>
 
+    <!-- 分辨率预设（与 viewer 的 Resolution 枚举一致: 1920x1080 / 1280x720 / 960x540 / 640x360） -->
+    <string-array name="resolution_entries">
+        <item>1920x1080</item>
+        <item>1280x720</item>
+        <item>960x540</item>
+        <item>640x360</item>
+    </string-array>
+
     <string name="cfg_rc_mode">码率模式</string>
     <string name="cfg_sharpness">锐度 (0~100)</string>
-    <string name="cfg_width">宽 (width)</string>
-    <string name="cfg_height">高 (height)</string>
 
     <!-- 配置窗体分段 tab（与 viewer 配置窗体分区一致） -->
     <string name="cfg_tab_encode">编码</string>
