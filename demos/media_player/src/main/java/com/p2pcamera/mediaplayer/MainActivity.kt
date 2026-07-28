@@ -120,10 +120,10 @@ class MainActivity : AppCompatActivity() {
             val dev = devices.getOrNull(position) ?: return@setOnItemClickListener
             onDeviceActivate(dev)
         }
-        // 长按 → 设备菜单（播放 / 重命名 / 配置 / 删除）
+        // 长按 → 直接打开设备配置（不再显示设备 ID，仅保留配置）
         listDevices.setOnItemLongClickListener { _, _, position, _ ->
             val dev = devices.getOrNull(position) ?: return@setOnItemLongClickListener true
-            showDeviceContextMenu(dev)
+            openConfig(dev)
             true
         }
 
@@ -234,24 +234,6 @@ class MainActivity : AppCompatActivity() {
     // ═══════════════════════════════════════════════
     // 设备菜单 / 增删 / 重命名
     // ═══════════════════════════════════════════════
-
-    private fun showDeviceContextMenu(dev: Device) {
-        val items = arrayOf(
-            getString(R.string.menu_play),
-            getString(R.string.menu_config),
-            getString(R.string.menu_delete),
-        )
-        AlertDialog.Builder(this)
-            .setTitle(shortId(dev.peerId))
-            .setItems(items) { _, which ->
-                when (which) {
-                    0 -> onDeviceActivate(dev)
-                    1 -> openConfig(dev)
-                    2 -> showDeleteConfirm(dev)
-                }
-            }
-            .show()
-    }
 
     private fun showAddDeviceDialog() {
         val etId = EditText(this).apply {
@@ -465,15 +447,15 @@ class MainActivity : AppCompatActivity() {
         val llEncode = view.findViewById<LinearLayout>(R.id.ll_encode)
         val llImage = view.findViewById<LinearLayout>(R.id.ll_image)
         val llSystem = view.findViewById<LinearLayout>(R.id.ll_system)
-        val tabBgSel = 0xFF3F6EFF.toInt()
-        val tabBgUnsel = 0xFF222222.toInt()
+        val tabSel = R.drawable.bg_tab_selected
+        val tabUnsel = R.drawable.bg_tab_unselected
         fun selectConfigTab(which: Int) {
             llEncode.visibility = if (which == 0) View.VISIBLE else View.GONE
             llImage.visibility = if (which == 1) View.VISIBLE else View.GONE
             llSystem.visibility = if (which == 2) View.VISIBLE else View.GONE
-            tabEncode.setBackgroundColor(if (which == 0) tabBgSel else tabBgUnsel)
-            tabImage.setBackgroundColor(if (which == 1) tabBgSel else tabBgUnsel)
-            tabSystem.setBackgroundColor(if (which == 2) tabBgSel else tabBgUnsel)
+            tabEncode.setBackgroundResource(if (which == 0) tabSel else tabUnsel)
+            tabImage.setBackgroundResource(if (which == 1) tabSel else tabUnsel)
+            tabSystem.setBackgroundResource(if (which == 2) tabSel else tabUnsel)
             tabEncode.setTextColor(if (which == 0) Color.WHITE else Color.GRAY)
             tabImage.setTextColor(if (which == 1) Color.WHITE else Color.GRAY)
             tabSystem.setTextColor(if (which == 2) Color.WHITE else Color.GRAY)

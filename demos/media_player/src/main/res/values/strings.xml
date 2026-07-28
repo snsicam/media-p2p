@@ -85,7 +85,7 @@
         <item>640x360</item>
     </string-array>
 
-    <string name="cfg_rc_mode">码率模式</string>
+    <string name="cfg_rc_mode">码率控制</string>
     <string name="cfg_sharpness">锐度 (0~100)</string>
 
     <!-- 配置窗体分段 tab（与 viewer 配置窗体分区一致） -->

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 背景层 -->
+    <color name="bg_primary">#0E0F13</color>
+    <color name="bg_panel">#15161B</color>
+    <!-- 表面 / 卡片 -->
+    <color name="surface">#1C1D23</color>
+    <color name="surface_2">#24262E</color>
+    <!-- 描边 / 分隔 -->
+    <color name="border">#2C2F38</color>
+    <color name="divider">#262932</color>
+    <!-- 强调色 (与桌面 viewer 对齐 #3F6EFF) -->
+    <color name="accent">#3F6EFF</color>
+    <color name="accent_hover">#5B86FF</color>
+    <!-- 文字 -->
+    <color name="text_primary">#EDEEF2</color>
+    <color name="text_secondary">#9AA0AB</color>
+    <color name="text_disabled">#5C616C</color>
+    <color name="text_on_accent">#FFFFFF</color>
+    <!-- 状态 -->
+    <color name="success">#4CD07D</color>
+    <color name="danger">#FF5C5C</color>
+</resources>

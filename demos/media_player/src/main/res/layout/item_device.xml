@@ -12,7 +12,7 @@
         android:id="@+id/txt_device_name"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/text_primary"
         android:textSize="14sp"
         android:singleLine="true"
         android:ellipsize="middle" />
@@ -21,7 +21,7 @@
         android:id="@+id/txt_device_status"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="#66BB6A"
+        android:textColor="@color/success"
         android:textSize="11sp"
         android:layout_marginTop="2dp"
         android:visibility="gone" />
