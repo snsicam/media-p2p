@@ -118,7 +118,7 @@ class MainActivity : AppCompatActivity() {
         listDevices.adapter = deviceAdapter
         listDevices.setOnItemClickListener { _, _, position, _ ->
             val dev = devices.getOrNull(position) ?: return@setOnItemClickListener
-            connectToDevice(dev)
+            onDeviceActivate(dev)
         }
         // 长按 → 设备菜单（播放 / 重命名 / 配置 / 删除）
         listDevices.setOnItemLongClickListener { _, _, position, _ ->
@@ -245,7 +245,7 @@ class MainActivity : AppCompatActivity() {
             .setTitle(shortId(dev.peerId))
             .setItems(items) { _, which ->
                 when (which) {
-                    0 -> connectToDevice(dev)
+                    0 -> onDeviceActivate(dev)
                     1 -> openConfig(dev)
                     2 -> showDeleteConfirm(dev)
                 }
@@ -313,7 +313,20 @@ class MainActivity : AppCompatActivity() {
     // 连接管理
     // ═══════════════════════════════════════════════
 
-    /** 点击设备 → 连接播放 */
+    /**
+     * 设备点击/长按"播放"的统一入口：
+     * - 当前正在播放该设备 → 再次激活即断开（stopCurrent）
+     * - 其他设备 / 未连接 → 连接（切设备时 connectToDevice 内部会先销毁旧连接）
+     */
+    private fun onDeviceActivate(dev: Device) {
+        if (dev.peerId == currentDeviceId && viewerHandle != 0L) {
+            stopCurrent()
+        } else {
+            connectToDevice(dev)
+        }
+    }
+
+    /** 点击设备 → 连接播放（切换设备时先销毁旧连接，避免多个设备同时连接） */
     private fun connectToDevice(dev: Device) {
         val peer = dev.peerId
         val config = viewerConfig
