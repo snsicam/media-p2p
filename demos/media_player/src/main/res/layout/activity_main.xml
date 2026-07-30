@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_primary">
+
+    <!-- 左侧设备管理面板 -->
+    <LinearLayout
+        android:id="@+id/panel_devices"
+        android:layout_width="130dp"
+        android:layout_height="0dp"
+        android:orientation="vertical"
+        android:background="@color/bg_panel"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/title_devices"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:padding="14dp"
+            android:background="@color/surface" />
+
+        <ListView
+            android:id="@+id/list_devices"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:divider="@color/divider"
+            android:dividerHeight="1dp"
+            android:choiceMode="singleChoice"
+            android:listSelector="@color/surface_2" />
+
+        <TextView
+            android:id="@+id/txt_device_hint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/hint_tap_device"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp"
+            android:padding="10dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_margin="8dp">
+
+            <Button
+                android:id="@+id/btn_add_device"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:text="@string/btn_add"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btn_delete_device"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:text="@string/btn_delete"
+                android:textSize="13sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 右侧视频 SurfaceView -->
+    <SurfaceView
+        android:id="@+id/surface_video"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/panel_info"
+        app:layout_constraintStart_toEndOf="@id/panel_devices"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- 未连接时的占位提示（居中于视频区） -->
+    <TextView
+        android:id="@+id/txt_placeholder"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/hint_select_device"
+        android:textColor="@color/text_disabled"
+        android:textSize="15sp"
+        app:layout_constraintTop_toTopOf="@id/surface_video"
+        app:layout_constraintBottom_toBottomOf="@id/surface_video"
+        app:layout_constraintStart_toStartOf="@id/surface_video"
+        app:layout_constraintEnd_toEndOf="@id/surface_video" />
+
+    <!-- 状态信息栏（右侧底部） -->
+    <LinearLayout
+        android:id="@+id/panel_info"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:background="@color/surface"
+        android:gravity="center_vertical"
+        app:layout_constraintStart_toEndOf="@id/panel_devices"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <TextView
+            android:id="@+id/txt_state"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/state_idle"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/txt_stream_info"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp"
+            android:layout_marginEnd="8dp" />
+
+        <Button
+            android:id="@+id/btn_reconnect"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="@string/btn_reconnect"
+            android:textSize="12sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

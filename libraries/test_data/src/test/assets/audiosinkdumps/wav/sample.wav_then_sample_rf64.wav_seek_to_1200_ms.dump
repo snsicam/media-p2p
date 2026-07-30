@@ -1,0 +1,7 @@
+AudioSink:
+  config:
+    pcmEncoding = 2
+    channelCount = 2
+    sampleRate = 48000
+  SampleBlock:
+    buffers = length 28536, hash 594E5D62

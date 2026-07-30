@@ -1,0 +1,61 @@
+# ============ 中继服务器 (结构化, 可读性强) ============
+# transport: "quic" (udp+quic-v1, 推荐) | "tcp"
+# ip 自动识别 ipv4/ipv6
+# 兼容旧格式: relays = ["/ip4/.../p2p/..."]
+[[relay_list]]
+name = "中继1-QUIC"
+ip = "101.35.90.171"
+port = 4001
+transport = "quic"
+peer_id = "12D3KooWDGUejVsts1G4tGyf8ukkr73eWxCr1EUfCQxgcbSDUie1"
+
+[[relay_list]]
+name = "中继1-TCP"
+ip = "101.35.90.171"
+port = 4001
+transport = "tcp"
+peer_id = "12D3KooWDGUejVsts1G4tGyf8ukkr73eWxCr1EUfCQxgcbSDUie1"
+
+[[relay_list]]
+name = "中继2-QUIC"
+ip = "124.221.175.240"
+port = 4001
+transport = "quic"
+peer_id = "12D3KooWBko9VUfuMVEMUFcVaktZxEY48MZTeDTEMUgz4op86qUv"
+
+[[relay_list]]
+name = "中继2-TCP"
+ip = "124.221.175.240"
+port = 4001
+transport = "tcp"
+peer_id = "12D3KooWBko9VUfuMVEMUFcVaktZxEY48MZTeDTEMUgz4op86qUv"
+
+[[relay_list]]
+name = "中继2-IPv6-QUIC"
+ip = "2402:4e00:c032:2400:3afc:b786:56a4:0"
+port = 4001
+transport = "quic"
+peer_id = "12D3KooWBko9VUfuMVEMUFcVaktZxEY48MZTeDTEMUgz4op86qUv"
+
+[[relay_list]]
+name = "中继2-IPv6-TCP"
+ip = "2402:4e00:c032:2400:3afc:b786:56a4:0"
+port = 4001
+transport = "tcp"
+peer_id = "12D3KooWBko9VUfuMVEMUFcVaktZxEY48MZTeDTEMUgz4op86qUv"
+
+# 设备列表：可填多个完整 PeerId 或序列号 SN，app 左侧设备栏点击即连接播放
+# 用 SN 连接的设备需配合下方 [serial_map] 才能本地解析并走 LAN 直连
+camera_serials = [
+    "12D3KooWG2ihY7Ne75KqkYyYrQWL1ACLUgUN8rp1nTskQB3RNNNt",
+    "e33700a6620dfddc",
+]
+no_audio = false
+enable_mdns = true
+stream_type = "auto"
+
+# 本地 serial→PeerId 静态映射：命中时 Rust 侧无需连接 Relay 即可解析 SN，
+# 并能在 LAN 内经 mDNS 直接匹配目标走直连（避免等待中继注册表解析、延迟降到瞬时）。
+# 用 SN 连接的设备务必在此登记；无映射时仍走旧的中继注册表路径（功能正常，无优化）。
+[serial_map]
+e33700a6620dfddc = "12D3KooWG2ihY7Ne75KqkYyYrQWL1ACLUgUN8rp1nTskQB3RNNNt"

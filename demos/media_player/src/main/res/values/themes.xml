@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 应用主主题: 现代深色 (AppCompat, 蓝强调) -->
+    <style name="Theme.MediaPlayer" parent="Theme.AppCompat.NoActionBar">
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorPrimaryDark">@color/bg_primary</item>
+        <item name="colorAccent">@color/accent</item>
+        <item name="colorButtonNormal">@color/accent</item>
+        <item name="android:colorBackground">@color/bg_primary</item>
+        <item name="android:windowBackground">@color/bg_primary</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="alertDialogTheme">@style/Theme.MediaPlayer.Dialog</item>
+        <item name="buttonStyle">@style/Widget.MediaPlayer.Button</item>
+        <item name="editTextStyle">@style/Widget.MediaPlayer.EditText</item>
+        <item name="spinnerStyle">@style/Widget.MediaPlayer.Spinner</item>
+    </style>
+
+    <!-- 对话框主题: 圆角深卡片 -->
+    <style name="Theme.MediaPlayer.Dialog" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/bg_dialog</item>
+        <item name="colorAccent">@color/accent</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="buttonBarPositiveButtonStyle">@style/Widget.MediaPlayer.Button</item>
+        <item name="buttonBarNegativeButtonStyle">@style/Widget.MediaPlayer.ButtonNeutral</item>
+    </style>
+
+    <!-- 主按钮: 填充强调色, 圆角 -->
+    <style name="Widget.MediaPlayer.Button" parent="Widget.AppCompat.Button">
+        <item name="android:background">@drawable/bg_button</item>
+        <item name="android:textColor">@color/text_on_accent</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+
+    <!-- 次按钮: 描边 -->
+    <style name="Widget.MediaPlayer.ButtonNeutral" parent="Widget.AppCompat.Button">
+        <item name="android:background">@drawable/bg_button_outline</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+
+    <!-- 输入框 -->
+    <style name="Widget.MediaPlayer.EditText" parent="Widget.AppCompat.EditText">
+        <item name="android:background">@drawable/bg_input</item>
+        <item name="android:textColor">@color/text_primary</item>
+    </style>
+
+    <!-- 下拉框 -->
+    <style name="Widget.MediaPlayer.Spinner" parent="Widget.AppCompat.Spinner">
+        <item name="android:background">@drawable/bg_input</item>
+        <item name="android:textColor">@color/text_primary</item>
+    </style>
+
+</resources>

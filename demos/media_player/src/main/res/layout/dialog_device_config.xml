@@ -1,0 +1,454 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <!-- 分段 tab: 编码 / 图像 / 系统（与 viewer 配置窗体分区一致；可左右滚动选择） -->
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none"
+            android:layout_marginTop="4dp">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/tab_encode"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="96dp"
+                    android:text="@string/cfg_tab_encode"
+                    android:textSize="12sp"
+                    android:stateListAnimator="@null" />
+
+                <Button
+                    android:id="@+id/tab_image"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="96dp"
+                    android:layout_marginStart="4dp"
+                    android:text="@string/cfg_tab_image"
+                    android:textSize="12sp"
+                    android:stateListAnimator="@null" />
+
+                <Button
+                    android:id="@+id/tab_system"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:minWidth="96dp"
+                    android:layout_marginStart="4dp"
+                    android:text="@string/cfg_tab_system"
+                    android:textSize="12sp"
+                    android:stateListAnimator="@null" />
+            </LinearLayout>
+        </HorizontalScrollView>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/divider"
+            android:layout_marginTop="6dp"
+            android:layout_marginBottom="4dp" />
+
+        <!-- ===== 编码（2 列网格, 每格「标签 + 控件」单行; 编码格式隐藏） ===== -->
+        <LinearLayout
+            android:id="@+id/ll_encode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- 编码格式: 隐藏但保留引用, 值仍随配置下发 -->
+            <Spinner
+                android:id="@+id/spin_codec"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone"
+                android:entries="@array/codec_entries" />
+
+            <!-- 第 1 行: 码流 | 码率模式 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/bg_cell"
+                    android:padding="6dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="2"
+                        android:text="@string/cfg_stream"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+                    <Spinner
+                        android:id="@+id/spin_stream"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="3"
+                        android:textSize="12sp"
+                        android:background="@drawable/bg_input"
+                        android:padding="6dp"
+                        android:entries="@array/stream_entries" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="6dp"
+                    android:background="@drawable/bg_cell"
+                    android:padding="6dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="2"
+                        android:text="@string/cfg_rc_mode"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+                    <Spinner
+                        android:id="@+id/spin_rc_mode"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="3"
+                        android:textSize="12sp"
+                        android:background="@drawable/bg_input"
+                        android:padding="6dp"
+                        android:entries="@array/rc_mode_entries" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 第 2 行: 分辨率 | 帧率 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/bg_cell"
+                    android:padding="6dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="2"
+                        android:text="@string/cfg_resolution"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+                    <Spinner
+                        android:id="@+id/spin_resolution"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="3"
+                        android:textSize="12sp"
+                        android:background="@drawable/bg_input"
+                        android:padding="6dp"
+                        android:entries="@array/resolution_entries" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="6dp"
+                    android:background="@drawable/bg_cell"
+                    android:padding="6dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="2"
+                        android:text="@string/cfg_fps"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+                    <EditText
+                        android:id="@+id/edit_fps"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="3"
+                        android:inputType="number"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        android:background="@drawable/bg_input"
+                        android:padding="6dp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 第 3 行: 码率 | GOP -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/bg_cell"
+                    android:padding="6dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="2"
+                        android:text="@string/cfg_bitrate"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+                    <EditText
+                        android:id="@+id/edit_bitrate"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="3"
+                        android:inputType="number"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        android:background="@drawable/bg_input"
+                        android:padding="6dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="6dp"
+                    android:background="@drawable/bg_cell"
+                    android:padding="6dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="2"
+                        android:text="@string/cfg_gop"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+                    <EditText
+                        android:id="@+id/edit_gop"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="3"
+                        android:inputType="number"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        android:background="@drawable/bg_input"
+                        android:padding="6dp" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ===== 图像（2 列卡片网格, 输入框圆角美化） ===== -->
+        <LinearLayout
+            android:id="@+id/ll_image"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <!-- 第 1 行: 亮度 | 对比度 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/bg_cell"
+                    android:padding="6dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="2"
+                        android:text="@string/cfg_brightness"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+                    <EditText
+                        android:id="@+id/edit_brightness"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="3"
+                        android:inputType="number"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        android:background="@drawable/bg_input"
+                        android:padding="6dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="6dp"
+                    android:background="@drawable/bg_cell"
+                    android:padding="6dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="2"
+                        android:text="@string/cfg_contrast"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+                    <EditText
+                        android:id="@+id/edit_contrast"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="3"
+                        android:inputType="number"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        android:background="@drawable/bg_input"
+                        android:padding="6dp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 第 2 行: 饱和度 | 锐度 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/bg_cell"
+                    android:padding="6dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="2"
+                        android:text="@string/cfg_saturation"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+                    <EditText
+                        android:id="@+id/edit_saturation"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="3"
+                        android:inputType="number"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        android:background="@drawable/bg_input"
+                        android:padding="6dp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="6dp"
+                    android:background="@drawable/bg_cell"
+                    android:padding="6dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="2"
+                        android:text="@string/cfg_sharpness"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+                    <EditText
+                        android:id="@+id/edit_sharpness"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="3"
+                        android:inputType="number"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        android:background="@drawable/bg_input"
+                        android:padding="6dp" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ===== 系统（2 列卡片网格） ===== -->
+        <LinearLayout
+            android:id="@+id/ll_system"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/bg_cell"
+                    android:padding="6dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="2"
+                        android:text="@string/cfg_name"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+                    <EditText
+                        android:id="@+id/edit_name"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="3"
+                        android:inputType="text"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        android:background="@drawable/bg_input"
+                        android:padding="6dp" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+            </LinearLayout>
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">P2P Camera Media Player</string>
+    <string name="btn_connect">连接</string>
+    <string name="btn_reconnect">重连</string>
+    <string name="label_relay">Relay 地址</string>
+    <string name="label_device_id">设备 ID</string>
+    <string name="hint_relay">/ip4/x.x.x.x/tcp/5001/p2p/12D3...</string>
+    <string name="hint_device_id">12D3KooW...</string>
+    <string name="state_idle">未连接</string>
+    <string name="state_connecting">连接中...</string>
+    <string name="state_connected">已连接</string>
+    <string name="state_direct">直连</string>
+    <string name="state_disconnected">已断开</string>
+    <string name="state_error">错误</string>
+    <string name="title_devices">设备管理</string>
+    <string name="hint_tap_device">点击选中设备，长按可连接 / 断开 / 配置</string>
+    <string name="hint_select_device">长按设备并选择「连接」开始播放</string>
+    <string name="device_status_connected">播放中</string>
+    <string name="no_devices">未配置设备</string>
+
+    <!-- 设备长按菜单 -->
+    <string name="menu_connect">连接</string>
+    <string name="menu_disconnect">断开</string>
+    <string name="menu_config">配置</string>
+
+    <!-- 添加设备对话框 -->
+    <string name="dlg_add_title">添加设备</string>
+    <string name="hint_peer_id">16位序列号 SN（如 e33700a6620dfddc）</string>
+    <string name="btn_add">添加</string>
+    <string name="btn_cancel">取消</string>
+    <string name="toast_empty_peer">序列号不能为空</string>
+    <string name="toast_dup_peer">该设备已存在</string>
+    <string name="toast_no_device">没有可删除的设备</string>
+    <string name="toast_no_select">请先选中设备</string>
+    <string name="toast_deleted">已删除 %1$s</string>
+    <string name="toast_disconnected">已断开 %1$s</string>
+    <string name="toast_not_connected">该设备未连接</string>
+
+    <!-- 删除确认 -->
+    <string name="dlg_delete_title">删除设备</string>
+    <string name="dlg_delete_msg">确定删除设备 %1$s？</string>
+    <string name="btn_delete">删除</string>
+
+    <!-- 设备配置对话框 -->
+    <string name="dlg_config_title">设备配置</string>
+    <string name="btn_apply">应用</string>
+    <string name="cfg_stream">码流</string>
+    <string name="cfg_codec">编码格式</string>
+    <string name="cfg_resolution">分辨率</string>
+    <string name="cfg_fps">帧率 (FPS)</string>
+    <string name="cfg_bitrate">码率 (kbps)</string>
+    <string name="cfg_gop">GOP</string>
+    <string name="cfg_brightness">亮度 (0~100)</string>
+    <string name="cfg_contrast">对比度 (0~100)</string>
+    <string name="cfg_saturation">饱和度 (0~100)</string>
+    <string name="cfg_exposure">曝光模式</string>
+    <string name="cfg_name">设备名</string>
+    <string name="config_fetching">读取设备参数中...</string>
+    <string name="config_not_connected">请先连接该设备后再配置</string>
+    <string name="config_apply_ok">配置已下发</string>
+    <string name="config_apply_fail">下发失败: %1$s</string>
+    <string name="config_fetch_fail">读取失败: %1$s</string>
+
+    <!-- Spinner 数组 -->
+    <string-array name="stream_entries">
+        <item>主码流 (main)</item>
+        <item>子码流 (sub)</item>
+        <item>第三码流 (third)</item>
+    </string-array>
+    <string-array name="codec_entries">
+        <item>H.265</item>
+        <item>H.264</item>
+    </string-array>
+    <string-array name="exposure_entries">
+        <item>自动 (auto)</item>
+        <item>手动 (manual)</item>
+    </string-array>
+    <string-array name="rc_mode_entries">
+        <item>CBR (恒定码率)</item>
+        <item>VBR (动态码率)</item>
+    </string-array>
+
+    <!-- 分辨率预设（与 viewer 的 Resolution 枚举一致: 1920x1080 / 1280x720 / 960x540 / 640x360） -->
+    <string-array name="resolution_entries">
+        <item>1920x1080</item>
+        <item>1280x720</item>
+        <item>960x540</item>
+        <item>640x360</item>
+    </string-array>
+
+    <string name="cfg_rc_mode">码率控制</string>
+    <string name="cfg_sharpness">锐度 (0~100)</string>
+
+    <!-- 配置窗体分段 tab（与 viewer 配置窗体分区一致） -->
+    <string name="cfg_tab_encode">编码</string>
+    <string name="cfg_tab_image">图像</string>
+    <string name="cfg_tab_system">系统</string>
+</resources>
