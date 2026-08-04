@@ -806,8 +806,13 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 if (streamReady && decoderConfigured) {
-                    val raw = RustBridge.nativePollVideoFrame(viewerHandle)
-                    if (raw != null && raw.size > 9) {
+                    // 一次性把已到达的视频帧全部喂给解码器。
+                    // 注意: 喂帧不等于渲染, 实际呈现时刻由 H265Decoder 的播放时钟控制,
+                    // 因此这里批量抽取不会导致快进, 只解除"每轮只取 1 帧"的吞吐瓶颈。
+                    var safety = 0
+                    while (safety++ < 64) {
+                        val raw = RustBridge.nativePollVideoFrame(viewerHandle)
+                        if (raw == null || raw.size <= 9) break
                         val ptsUs = extractPtsUs(raw)
                         val flags = extractVideoFlags(raw)
                         val nalData = extractVideoFrameData(raw)
@@ -817,8 +822,11 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 if (streamReady && audioPlayer != null) {
-                    val raw = RustBridge.nativePollAudioFrame(viewerHandle)
-                    if (raw != null && raw.size > 8) {
+                    // 音频同样批量抽取, 由 AudioTrack 自身的播放时钟平滑
+                    var safety = 0
+                    while (safety++ < 64) {
+                        val raw = RustBridge.nativePollAudioFrame(viewerHandle)
+                        if (raw == null || raw.size <= 8) break
                         val pcmData = extractFrameData(raw)
                         audioPlayer?.write(pcmData)
                     }

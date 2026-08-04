@@ -34,7 +34,14 @@ class H265Decoder(private val width: Int = 1920, private val height: Int = 1080)
     private var csdBuilt = false
     private val csd0 = ByteBuffer.allocate(65536)   // VPS+SPS+PPS
     private val bufferInfo = MediaCodec.BufferInfo()
-    private var fpsClock: Long = 0
+    // 播放时钟: 由首帧 PTS 锚定到系统单调时钟, 之后据此计算每帧的目标呈现时刻
+    private var anchorPtsUs: Long = 0L          // 首帧的 PTS (微秒)
+    private var anchorNs: Long = 0L             // 锚定时刻的 System.nanoTime()
+    private var clockStarted = false
+    // 目标缓冲: 让首帧晚一点呈现, 吸收网络突发到达带来的抖动
+    private val TARGET_BUFFER_US = 60_000L      // 60ms
+    // 落后太多时加速追赶(缩短等待), 不丢帧, 避免 P 帧断链花屏
+    private val MAX_BEHIND_US = 300_000L        // 300ms
     private var csdWaitLogCount = 0
 
     // 统计
@@ -65,6 +72,9 @@ class H265Decoder(private val width: Int = 1920, private val height: Int = 1080)
             configure(format, surface, null, 0)
         }
         csdBuilt = false
+        clockStarted = false
+        anchorPtsUs = 0L
+        anchorNs = 0L
         Log.i(TAG, "Codec configured (sync mode): $codecName")
     }
 
@@ -88,6 +98,14 @@ class H265Decoder(private val width: Int = 1920, private val height: Int = 1080)
         val codec = codec ?: return
         if (!started) return
         try {
+            // 播放时钟锚定: 首帧到来时记下 (pts, 当前系统时间)
+            if (!clockStarted) {
+                anchorPtsUs = ptsUs
+                anchorNs = System.nanoTime()
+                clockStarted = true
+                Log.i(TAG, "Playback clock anchored: ptsUs=$ptsUs")
+            }
+
             // CSD 收集: 首帧前需要 VPS+SPS+PPS
             if (!csdBuilt) {
                 collectCsd(nalBytes)
@@ -122,9 +140,6 @@ class H265Decoder(private val width: Int = 1920, private val height: Int = 1080)
 
             // 同步模式: 主动 drain 输出并渲染到 Surface
             drainOutputs(codec)
-
-            // 首帧时钟
-            if (fpsClock == 0L) fpsClock = ptsUs
         } catch (e: Exception) {
             Log.e(TAG, "feedFrame error: ${e.message}", e)
         }
@@ -132,15 +147,31 @@ class H265Decoder(private val width: Int = 1920, private val height: Int = 1080)
 
     /**
      * 同步模式: 取出所有已解码输出 buffer 并渲染到 Surface
+     *
+     * 帧率控制: 用播放时钟把每帧的 PTS 映射到系统单调时钟的目标呈现时刻,
+     * 交给 SurfaceFlinger 在 VSync 上精确调度, 避免"收到即渲染"导致的忽快忽慢。
      */
     private fun drainOutputs(codec: MediaCodec) {
         var outIndex = codec.dequeueOutputBuffer(bufferInfo, 0)
         while (outIndex >= 0) {
-            codec.releaseOutputBuffer(outIndex, true) // true = render to surface
-            lastPtsUs = bufferInfo.presentationTimeUs
+            val ptsUs = bufferInfo.presentationTimeUs
+            lastPtsUs = ptsUs
             frameCount++
+
+            // 计算目标呈现时刻 (nanoTime)
+            // target = anchor + (pts - anchorPts) + 目标缓冲
+            var renderAtNs = anchorNs + (ptsUs - anchorPtsUs) * 1000L + TARGET_BUFFER_US * 1000L
+
+            // 落后太多(网络堆积): 加速追赶, 不丢帧, 仅把呈现时刻前移到"现在"
+            val nowNs = System.nanoTime()
+            if (renderAtNs - nowNs > MAX_BEHIND_US * 1000L) {
+                renderAtNs = nowNs
+            }
+
+            codec.releaseOutputBuffer(outIndex, renderAtNs) // 带时间戳呈现
             if (frameCount <= 3 || frameCount % 100 == 0L) {
-                Log.i(TAG, "Rendered frame #$frameCount pts=${bufferInfo.presentationTimeUs}")
+                val diffMs = (renderAtNs - nowNs) / 1_000_000L
+                Log.i(TAG, "Rendered frame #$frameCount pts=$ptsUs in ${diffMs}ms")
             }
             outIndex = codec.dequeueOutputBuffer(bufferInfo, 0)
         }
