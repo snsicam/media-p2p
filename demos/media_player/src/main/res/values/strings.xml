@@ -96,4 +96,16 @@
     <string name="cfg_tab_encode">编码</string>
     <string name="cfg_tab_image">图像</string>
     <string name="cfg_tab_system">系统</string>
+
+    <!-- 抓拍文件查询 / 下载 -->
+    <string name="cfg_snap_title">抓拍文件 (延时摄影)</string>
+    <string name="cfg_snap_query">查询</string>
+    <string name="cfg_snap_download">下载</string>
+    <string name="cfg_snap_select_hint">点击列表选择文件，再点「下载」</string>
+    <string name="cfg_snap_empty">暂无抓拍文件</string>
+    <string name="cfg_snap_querying">查询中...</string>
+    <string name="cfg_snap_downloading">下载中: %1$s</string>
+    <string name="cfg_snap_downloaded">已下载: %1$s</string>
+    <string name="cfg_snap_no_select">请先在列表中选择文件</string>
+    <string name="cfg_snap_fail">查询/下载失败: %1$s</string>
 </resources>

@@ -28,6 +28,15 @@ object RustBridge {
     // 同步阻塞 (最长 5s), 调用方须在后台线程执行
     external fun nativeSendControlCommand(handle: Long, json: String): String?
 
+    // ── 抓拍文件查询 / 下载 (系统 tab) ──
+    // 查询设备已合成的 AVI 文件列表, 返回 JSON: {"ok":true,"files":["a.avi",...]}
+    // 同步阻塞 (最长 5s), 调用方须在后台线程执行
+    external fun nativeListSnapshots(handle: Long): String?
+
+    // 下载指定 AVI 到本地目录, 返回 JSON: {"ok":true,"size":123,"path":"..."}
+    // 同步阻塞 (最长 60s), 调用方须在后台线程执行
+    external fun nativeDownloadFile(handle: Long, name: String, destDir: String): String?
+
     // ── 数据轮询（非阻塞, 无帧时返回 null） ──
     // 视频返回格式: [PTS(8B big-endian i64 µs)] + [flags(1B)] + [H.265 NAL data]
     //   flags bit 2 (0x04) = 关键帧, 由 Rust viewer 接收端字节扫描判定 (cam 不传, 不可靠)

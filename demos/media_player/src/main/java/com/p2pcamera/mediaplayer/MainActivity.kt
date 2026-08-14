@@ -504,6 +504,104 @@ class MainActivity : AppCompatActivity() {
         val dialog = AlertDialog.Builder(this)
             .setView(view)
             .setNegativeButton(R.string.btn_cancel, null)
+
+        // ── 抓拍文件查询 / 下载 (系统 tab) ──
+        val btnQuerySnaps = view.findViewById<Button>(R.id.btn_query_snaps)
+        val btnDownloadSnap = view.findViewById<Button>(R.id.btn_download_snap)
+        val lvSnaps = view.findViewById<ListView>(R.id.lv_snaps)
+        val tvSnapStatus = view.findViewById<TextView>(R.id.tv_snap_status)
+        val snapFiles = mutableListOf<String>()
+        var selectedSnap: String? = null
+        val snapAdapter = ArrayAdapter(this, android.R.layout.simple_list_item_single_choice, snapFiles)
+        lvSnaps.adapter = snapAdapter
+        lvSnaps.choiceMode = ListView.CHOICE_MODE_SINGLE
+
+        fun doQuerySnaps() {
+            if (viewerHandle == 0L) {
+                tvSnapStatus.text = getString(R.string.cfg_snap_fail, "未连接")
+                return
+            }
+            tvSnapStatus.text = getString(R.string.cfg_snap_querying)
+            lvSnaps.visibility = View.GONE
+            selectedSnap = null
+            lifecycleScope.launch(Dispatchers.IO) {
+                val resp = try {
+                    RustBridge.nativeListSnapshots(viewerHandle)
+                } catch (e: Exception) {
+                    Log.e(TAG, "nativeListSnapshots failed", e)
+                    null
+                }
+                val files = try {
+                    val j = if (resp.isNullOrEmpty()) null else JSONObject(resp)
+                    if (j != null && j.optBoolean("ok", false)) {
+                        val arr = j.optJSONArray("files")
+                        val list = mutableListOf<String>()
+                        if (arr != null) for (i in 0 until arr.length()) list.add(arr.getString(i))
+                        list
+                    } else emptyList<String>()
+                } catch (e: Exception) {
+                    Log.e(TAG, "parse list_snapshots resp failed", e)
+                    emptyList<String>()
+                }
+                runOnUiThread {
+                    snapFiles.clear()
+                    snapFiles.addAll(files)
+                    snapAdapter.notifyDataSetChanged()
+                    if (files.isEmpty()) {
+                        lvSnaps.visibility = View.GONE
+                        tvSnapStatus.text = getString(R.string.cfg_snap_empty)
+                    } else {
+                        lvSnaps.visibility = View.VISIBLE
+                        tvSnapStatus.text = getString(R.string.cfg_snap_downloaded, "")
+                            .let { "${files.size} 个文件, 点选后下载" }
+                    }
+                }
+            }
+        }
+
+        fun doDownload(name: String) {
+            if (viewerHandle == 0L) return
+            tvSnapStatus.text = getString(R.string.cfg_snap_downloading, name)
+            lifecycleScope.launch(Dispatchers.IO) {
+                val destDir = File(filesDir, "snaps").apply { mkdirs() }.absolutePath
+                val resp = try {
+                    RustBridge.nativeDownloadFile(viewerHandle, name, destDir)
+                } catch (e: Exception) {
+                    Log.e(TAG, "nativeDownloadFile failed", e)
+                    null
+                }
+                runOnUiThread {
+                    val j = try {
+                        if (resp.isNullOrEmpty()) null else JSONObject(resp)
+                    } catch (e: Exception) {
+                        null
+                    }
+                    if (j != null && j.optBoolean("ok", false)) {
+                        tvSnapStatus.text = getString(R.string.cfg_snap_downloaded,
+                            j.optString("path", name))
+                    } else {
+                        tvSnapStatus.text = getString(R.string.cfg_snap_fail,
+                            j?.optString("error", "unknown") ?: "no response")
+                    }
+                }
+            }
+        }
+
+        btnQuerySnaps.setOnClickListener { doQuerySnaps() }
+        lvSnaps.setOnItemClickListener { _, _, position, _ ->
+            lvSnaps.setItemChecked(position, true)
+            selectedSnap = snapFiles.getOrNull(position)
+            tvSnapStatus.text = selectedSnap?.let { "已选择: $it" }
+                ?: getString(R.string.cfg_snap_no_select)
+        }
+        btnDownloadSnap.setOnClickListener {
+            val name = selectedSnap
+            if (name == null) {
+                tvSnapStatus.text = getString(R.string.cfg_snap_no_select)
+                return@setOnClickListener
+            }
+            doDownload(name)
+        }
             .setPositiveButton(R.string.btn_apply, null)
             .create()
 

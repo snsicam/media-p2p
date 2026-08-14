@@ -448,6 +448,69 @@
                     android:layout_height="0dp"
                     android:layout_weight="1" />
             </LinearLayout>
+
+            <!-- 抓拍文件查询 / 下载 -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/cfg_snap_title"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="6dp">
+
+                <Button
+                    android:id="@+id/btn_query_snaps"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    android:text="@string/cfg_snap_query"
+                    android:textSize="13sp"
+                    android:stateListAnimator="@null" />
+
+                <Button
+                    android:id="@+id/btn_download_snap"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:text="@string/cfg_snap_download"
+                    android:textSize="13sp"
+                    android:stateListAnimator="@null" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tv_snap_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="@string/cfg_snap_select_hint"
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
+
+            <!-- 文件列表 (有文件才显示, 点击单选, 再用「下载」按钮下载) -->
+            <ListView
+                android:id="@+id/lv_snaps"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:choiceMode="singleChoice"
+                android:dividerHeight="1dp"
+                android:visibility="gone" />
         </LinearLayout>
 
     </LinearLayout>
