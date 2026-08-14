@@ -501,9 +501,11 @@ class MainActivity : AppCompatActivity() {
         tabSystem.setOnClickListener { selectConfigTab(2) }
         selectConfigTab(0)
 
-        val dialog = AlertDialog.Builder(this)
+        val dialog: AlertDialog = AlertDialog.Builder(this)
             .setView(view)
+            .setPositiveButton(R.string.btn_apply, null)
             .setNegativeButton(R.string.btn_cancel, null)
+            .create()
 
         // ── 抓拍文件查询 / 下载 (系统 tab) ──
         val btnQuerySnaps = view.findViewById<Button>(R.id.btn_query_snaps)
@@ -602,8 +604,6 @@ class MainActivity : AppCompatActivity() {
             }
             doDownload(name)
         }
-            .setPositiveButton(R.string.btn_apply, null)
-            .create()
 
         // 当前拉取的编码配置（作为下发基底，保留未编辑字段）
         var encoderBase: JSONObject? = null
@@ -729,7 +729,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { applyConfig() }
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener { applyConfig() }
         }
 
         dialog.show()

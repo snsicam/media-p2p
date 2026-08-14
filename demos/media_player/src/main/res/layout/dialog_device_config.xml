@@ -463,26 +463,27 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
+                android:gravity="start"
                 android:layout_marginTop="6dp">
 
                 <Button
                     android:id="@+id/btn_query_snaps"
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:minWidth="96dp"
                     android:layout_marginEnd="4dp"
                     android:text="@string/cfg_snap_query"
-                    android:textSize="13sp"
+                    android:textSize="12sp"
                     android:stateListAnimator="@null" />
 
                 <Button
                     android:id="@+id/btn_download_snap"
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:minWidth="96dp"
                     android:layout_marginStart="4dp"
                     android:text="@string/cfg_snap_download"
-                    android:textSize="13sp"
+                    android:textSize="12sp"
                     android:stateListAnimator="@null" />
             </LinearLayout>
 
